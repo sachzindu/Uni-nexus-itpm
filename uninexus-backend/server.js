@@ -12,6 +12,7 @@ const connectDB = require('./config/db');
 const { errorHandler } = require('./middleware/errorMiddleware');
 const { initializeSocket } = require('./utils/socketHandler');
 const logger = require('./utils/logger');
+const path = require('path');
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
@@ -55,6 +56,9 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'development') {
     app.use(morgan('dev'));
 }
+
+// ─── Static File Serving ─────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── API Routes ──────────────────────────────────────────────
 app.use('/api/auth', authRoutes);

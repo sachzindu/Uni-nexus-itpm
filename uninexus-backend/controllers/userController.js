@@ -89,4 +89,29 @@ const getUserById = async (req, res, next) => {
     }
 };
 
-module.exports = { getProfile, updateProfile, getAllUsers, getRecommendations, getAdminStats, getUserById };
+/**
+ * @desc    Upload profile photo
+ * @route   POST /api/users/profile/photo
+ * @access  Private
+ */
+const uploadProfilePhoto = async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'No image file provided. Please upload a JPEG, PNG, or WebP image.',
+            });
+        }
+
+        const user = await userService.updateProfilePhoto(req.user._id, req.file.filename);
+        res.status(200).json({
+            success: true,
+            message: 'Profile photo updated successfully',
+            data: { user },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+module.exports = { getProfile, updateProfile, getAllUsers, getRecommendations, getAdminStats, getUserById, uploadProfilePhoto };

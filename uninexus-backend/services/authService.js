@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const createError = require('http-errors');
 const User = require('../models/User');
+const Group = require('../models/Group');
 const logger = require('../utils/logger');
 
 /**
@@ -65,7 +66,17 @@ const getUserById = async (userId) => {
     if (!user) {
         throw createError(404, 'User not found.');
     }
-    return user;
+
+    // Populate the groups array from the Group collection since it is
+    // tracked on the Group model (Group.members) rather than on User.groups.
+    const userGroups = await Group.find(
+        { members: userId, isArchived: false },
+        '_id'
+    ).lean();
+    const userObj = user.toJSON();
+    userObj.groups = userGroups.map((g) => g._id);
+
+    return userObj;
 };
 
 module.exports = { signup, login, getUserById, generateToken };

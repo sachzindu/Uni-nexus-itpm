@@ -1,4 +1,6 @@
 const createError = require('http-errors');
+const path = require('path');
+const fs = require('fs');
 const User = require('../models/User');
 const FriendRequest = require('../models/FriendRequest');
 const { getRecommendedUsers } = require('../utils/recommendationEngine');
@@ -149,4 +151,31 @@ const getUserById = async (userId) => {
     return user;
 };
 
-module.exports = { getProfile, updateProfile, getAllUsers, getRecommendations, getAdminStats, getUserById };
+/**
+ * Update a user's profile photo.
+ * Saves the new photo URL and removes the old file from disk if present.
+ * @param {string} userId
+ * @param {string} filename - The uploaded file's name on disk
+ * @returns {Promise<object>} Updated user
+ */
+const updateProfilePhoto = async (userId, filename) => {
+    const user = await User.findById(userId);
+    if (!user) {
+        throw createError(404, 'User not found.');
+    }
+
+    // Delete old photo file from disk if it exists
+    if (user.profilePhotoUrl) {
+        const oldFilePath = path.join(__dirname, '..', user.profilePhotoUrl);
+        if (fs.existsSync(oldFilePath)) {
+            fs.unlinkSync(oldFilePath);
+        }
+    }
+
+    user.profilePhotoUrl = `/uploads/profile-photos/${filename}`;
+    await user.save();
+
+    return user;
+};
+
+module.exports = { getProfile, updateProfile, getAllUsers, getRecommendations, getAdminStats, getUserById, updateProfilePhoto };

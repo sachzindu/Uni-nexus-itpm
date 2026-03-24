@@ -65,6 +65,10 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: '',
         },
+        profilePhotoUrl: {
+            type: String,
+            default: '',
+        },
         groups: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Group',
