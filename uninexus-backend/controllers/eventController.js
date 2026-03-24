@@ -1,83 +1,112 @@
-const eventService = require('../services/eventService');
+const mongoose = require('mongoose');
+const Event = require('../models/Event');
 
-/**
- * @desc    Create a new event
- * @route   POST /api/events
- * @access  Private
- */
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+const resolveUserId = (req) => req.user?._id || req.body?.userId;
+
 const createEvent = async (req, res, next) => {
     try {
-        const event = await eventService.createEvent(req.user._id, req.body);
+        console.log('[EVENT] createEvent payload:', req.body);
+        const event = await Event.create(req.body);
+
         res.status(201).json({
             success: true,
             message: 'Event created successfully',
-            data: { event },
+            data: event,
         });
     } catch (error) {
         next(error);
     }
 };
 
-/**
- * @desc    Get all events
- * @route   GET /api/events
- * @access  Private
- */
 const getEvents = async (req, res, next) => {
     try {
-        const result = await eventService.getEvents(req.query);
-        res.status(200).json({ success: true, data: result });
-    } catch (error) {
-        next(error);
-    }
-};
+        const { status, search } = req.query;
+        const filter = {};
 
-/**
- * @desc    Get a single event
- * @route   GET /api/events/:id
- * @access  Private
- */
-const getEventById = async (req, res, next) => {
-    try {
-        const event = await eventService.getEventById(req.params.id);
-        res.status(200).json({ success: true, data: { event } });
-    } catch (error) {
-        next(error);
-    }
-};
+        if (status) filter.status = status;
+        if (search) {
+            filter.$or = [
+                { title: { $regex: search, $options: 'i' } },
+                { description: { $regex: search, $options: 'i' } },
+                { location: { $regex: search, $options: 'i' } },
+            ];
+        }
 
-/**
- * @desc    Update an event
- * @route   PUT /api/events/:id
- * @access  Private (Organizer / Admin)
- */
-const updateEvent = async (req, res, next) => {
-    try {
-        const event = await eventService.updateEvent(
-            req.params.id,
-            req.user._id,
-            req.user.role,
-            req.body
-        );
+        console.log('[EVENT] getEvents filter:', filter);
+        const events = await Event.find(filter).sort({ eventDate: 1, createdAt: -1 });
+
         res.status(200).json({
             success: true,
-            message: 'Event updated successfully',
-            data: { event },
+            data: events,
+            count: events.length,
         });
     } catch (error) {
         next(error);
     }
 };
 
-/**
- * @desc    Delete an event
- * @route   DELETE /api/events/:id
- * @access  Private (Organizer / Admin)
- */
+const getEventById = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid event ID' });
+        }
+
+        const event = await Event.findById(id).populate('attendees', 'name email');
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: event,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+const updateEvent = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid event ID' });
+        }
+
+        console.log('[EVENT] updateEvent id:', id);
+        const event = await Event.findByIdAndUpdate(id, req.body, {
+            new: true,
+            runValidators: true,
+        });
+
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Event updated successfully',
+            data: event,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 const deleteEvent = async (req, res, next) => {
     try {
-        await eventService.deleteEvent(req.params.id, req.user._id, req.user.role);
-        res.status(200).json({
+        const { id } = req.params;
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid event ID' });
+        }
+
+        const event = await Event.findByIdAndDelete(id);
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found' });
+        }
+
+        return res.status(200).json({
             success: true,
             message: 'Event deleted successfully',
         });
@@ -86,65 +115,141 @@ const deleteEvent = async (req, res, next) => {
     }
 };
 
-/**
- * @desc    Register for an event
- * @route   POST /api/events/:id/register
- * @access  Private
- */
-const registerForEvent = async (req, res, next) => {
+const registerEvent = async (req, res, next) => {
     try {
-        const event = await eventService.registerForEvent(req.params.id, req.user._id);
-        res.status(200).json({
+        const { id } = req.params;
+        const { userId } = req.body || {};
+
+        console.log('Register payload:', req.body);
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid event ID' });
+        }
+        if (!userId || !isValidObjectId(userId)) {
+            return res.status(400).json({ success: false, message: 'Valid userId is required' });
+        }
+
+        const event = await Event.findById(id);
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found' });
+        }
+
+        if (!Array.isArray(event.attendees)) {
+            event.attendees = [];
+        }
+
+        if (event.status === 'cancelled' || event.status === 'completed') {
+            return res.status(400).json({ success: false, message: 'Registration is closed for this event' });
+        }
+
+        const normalizedUserId = String(userId);
+        const isAlreadyRegistered = event.attendees.some(
+            (attendeeId) => String(attendeeId) === normalizedUserId
+        );
+        if (isAlreadyRegistered) {
+            return res.status(409).json({ success: false, message: 'Already registered' });
+        }
+
+        if (event.attendees.length >= event.maxAttendees) {
+            return res.status(409).json({ success: false, message: 'Event is full' });
+        }
+
+        event.attendees.push(userId);
+        await event.save();
+
+        return res.status(200).json({
             success: true,
-            message: 'Registered for event successfully',
-            data: { event },
+            message: 'Registered successfully',
+            data: event,
         });
     } catch (error) {
         next(error);
     }
 };
 
-/**
- * @desc    Unregister from an event
- * @route   POST /api/events/:id/unregister
- * @access  Private
- */
-const unregisterFromEvent = async (req, res, next) => {
+const unregisterEvent = async (req, res, next) => {
     try {
-        const event = await eventService.unregisterFromEvent(req.params.id, req.user._id);
-        res.status(200).json({
+        const { id } = req.params;
+        const userId = resolveUserId(req);
+
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid event ID' });
+        }
+        if (!isValidObjectId(userId)) {
+            return res.status(400).json({ success: false, message: 'Valid userId is required' });
+        }
+
+        const event = await Event.findById(id);
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found' });
+        }
+
+        event.attendees = event.attendees.filter((attendeeId) => !attendeeId.equals(userId));
+        await event.save();
+
+        return res.status(200).json({
             success: true,
-            message: 'Unregistered from event successfully',
-            data: { event },
+            message: 'Unregistered successfully',
+            data: event,
         });
     } catch (error) {
         next(error);
     }
 };
 
-/**
- * @desc    Get event attendees
- * @route   GET /api/events/:id/attendees
- * @access  Private
- */
-const getAttendees = async (req, res, next) => {
+const getEventAttendees = async (req, res, next) => {
     try {
-        const attendees = await eventService.getAttendees(req.params.id);
-        res.status(200).json({ success: true, data: { attendees } });
+        const { id } = req.params;
+        if (!isValidObjectId(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid event ID' });
+        }
+
+        const event = await Event.findById(id).populate('attendees', 'name email avatar department year');
+        if (!event) {
+            return res.status(404).json({ success: false, message: 'Event not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                attendees: Array.isArray(event.attendees) ? event.attendees : [],
+            },
+        });
     } catch (error) {
         next(error);
     }
 };
 
-/**
- * @desc    Get event dashboard statistics
- * @route   GET /api/events/dashboard
- * @access  Private (Admin)
- */
-const getDashboardStats = async (req, res, next) => {
+const getEventDashboardStats = async (req, res, next) => {
     try {
-        const stats = await eventService.getDashboardStats();
-        res.status(200).json({ success: true, data: { stats } });
+        const now = new Date();
+        const [totalEvents, upcomingEvents, completedEvents, cancelledEvents, totalRegistrations] =
+            await Promise.all([
+                Event.countDocuments(),
+                Event.countDocuments({
+                    eventDate: { $gte: now },
+                    status: { $in: ['upcoming', 'ongoing'] },
+                }),
+                Event.countDocuments({ status: 'completed' }),
+                Event.countDocuments({ status: 'cancelled' }),
+                Event.aggregate([
+                    { $project: { attendeeCount: { $size: { $ifNull: ['$attendees', []] } } } },
+                    { $group: { _id: null, total: { $sum: '$attendeeCount' } } },
+                ]),
+            ]);
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                stats: {
+                    totalEvents,
+                    upcomingEvents,
+                    completedEvents,
+                    cancelledEvents,
+                    totalRegistrations: totalRegistrations[0]?.total || 0,
+                },
+            },
+        });
     } catch (error) {
         next(error);
     }
@@ -156,8 +261,8 @@ module.exports = {
     getEventById,
     updateEvent,
     deleteEvent,
-    registerForEvent,
-    unregisterFromEvent,
-    getAttendees,
-    getDashboardStats,
+    registerEvent,
+    unregisterEvent,
+    getEventAttendees,
+    getEventDashboardStats,
 };

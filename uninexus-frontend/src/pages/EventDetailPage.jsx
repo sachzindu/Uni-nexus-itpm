@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Calendar, MapPin, Users, Clock, Check, Copy,
     Ticket,
 } from 'lucide-react';
-import { eventAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useEventStore } from '../contexts/EventContext';
+import { eventAPI } from '../services/api';
 import { useToast } from '../components/ui/Toast';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -18,30 +19,65 @@ import Loader from '../components/ui/Loader';
 const EventDetailPage = () => {
     const { id } = useParams();
     const { user } = useAuth();
+    const {
+        loading,
+        getEventById,
+        fetchEventById,
+        unregisterFromEvent,
+    } = useEventStore();
     const toast = useToast();
     const navigate = useNavigate();
+    const isAdmin = user?.role === 'admin';
 
-    const [event, setEvent] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const event = getEventById(id);
+    const missingToastShownRef = useRef(false);
+    const [detailLoading, setDetailLoading] = useState(true);
     const [registering, setRegistering] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [regId, setRegId] = useState('');
     const [userRating, setUserRating] = useState(0);
 
     useEffect(() => {
-        const fetchEvent = async () => {
-            try {
-                const res = await eventAPI.getById(id);
-                setEvent(res.data);
-            } catch {
-                toast.error('Event not found');
-                navigate('/events');
-            } finally {
-                setLoading(false);
+        let active = true;
+
+        const hydrateEvent = async () => {
+            if (loading) {
+                if (active) setDetailLoading(true);
+                return;
+            }
+
+            if (event) {
+                if (active) setDetailLoading(false);
+                return;
+            }
+
+            if (active) setDetailLoading(true);
+            const fetched = await fetchEventById(id);
+
+            if (!active) return;
+            if (fetched) {
+                setDetailLoading(false);
+                return;
+            }
+
+            setDetailLoading(false);
+            if (!missingToastShownRef.current) {
+                missingToastShownRef.current = true;
+                try {
+                    toast.error('Event not found');
+                } catch (err) {
+                    console.error(err);
+                } finally {
+                    navigate('/events');
+                }
             }
         };
-        fetchEvent();
-    }, [id]);
+
+        hydrateEvent();
+        return () => {
+            active = false;
+        };
+    }, [event, loading, fetchEventById, id, navigate, toast]);
 
     const isRegistered = event?.attendees?.some(
         (a) => (typeof a === 'string' ? a : a._id) === user?._id
@@ -50,7 +86,20 @@ const EventDetailPage = () => {
     const handleRegister = async () => {
         setRegistering(true);
         try {
-            await eventAPI.register(id);
+            if (!user?._id) {
+                throw new Error('Valid user id required');
+            }
+
+            console.log('User ID:', user._id);
+            await eventAPI.register(id, { userId: user._id });
+            const refetched = await eventAPI.getById(id);
+            const nextEvent = refetched?.data?.event || refetched?.data || refetched?.event || refetched;
+
+            if (!nextEvent?._id) {
+                throw new Error('Unable to register for this event');
+            }
+
+            await fetchEventById(id);
             // Generate a unique registration ID
             const uniqueId = `UNI-${Date.now().toString(36).toUpperCase()}-${Math.random()
                 .toString(36)
@@ -58,10 +107,8 @@ const EventDetailPage = () => {
                 .toUpperCase()}`;
             setRegId(uniqueId);
             setShowSuccess(true);
-            // Refresh event data
-            const res = await eventAPI.getById(id);
-            setEvent(res.data);
         } catch (err) {
+            console.error(err);
             toast.error(err.message || 'Registration failed');
         } finally {
             setRegistering(false);
@@ -70,11 +117,13 @@ const EventDetailPage = () => {
 
     const handleUnregister = async () => {
         try {
-            await eventAPI.unregister(id);
+            const updatedEvent = await unregisterFromEvent(id, user?._id);
+            if (!updatedEvent) {
+                throw new Error('Unable to unregister from this event');
+            }
             toast.success('Unregistered from event');
-            const res = await eventAPI.getById(id);
-            setEvent(res.data);
         } catch (err) {
+            console.error(err);
             toast.error(err.message || 'Failed to unregister');
         }
     };
@@ -84,7 +133,7 @@ const EventDetailPage = () => {
         toast.success('Registration ID copied!');
     };
 
-    if (loading) {
+    if (loading || detailLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
                 <Loader size="lg" />
@@ -92,7 +141,13 @@ const EventDetailPage = () => {
         );
     }
 
-    if (!event) return null;
+    if (!event) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader size="lg" />
+            </div>
+        );
+    }
 
     const statusColors = {
         upcoming: 'purple',
@@ -221,37 +276,50 @@ const EventDetailPage = () => {
                 </div>
             </motion.div>
 
-            {/* Attendees */}
-            <Card hover={false} className="mb-6">
-                <h3 className="text-lg font-bold text-text-primary dark:text-text-dark mb-4">
-                    Attendees ({event.attendees?.length || 0})
-                </h3>
-                {event.attendees?.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                        {event.attendees.map((att) => {
-                            const a = typeof att === 'string' ? { _id: att, name: '?' } : att;
-                            return (
-                                <div
-                                    key={a._id}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-full
-                    bg-surface-alt dark:bg-surface-dark text-sm"
-                                >
-                                    <div className="w-6 h-6 rounded-full gradient-bg flex items-center justify-center text-white text-[10px] font-bold">
-                                        {a.name?.charAt(0)?.toUpperCase() || '?'}
+            {/* Registered Students (Admin Only) */}
+            {isAdmin && (
+                <Card hover={false} className="mb-6">
+                    <h3 className="text-lg font-bold text-text-primary dark:text-text-dark mb-4">
+                        Registered Students ({event?.attendees?.length || 0})
+                    </h3>
+                    {event?.attendees?.length > 0 ? (
+                        <div className="space-y-3">
+                            {event.attendees.map((student, index) => {
+                                const safeStudent = typeof student === 'string'
+                                    ? { _id: student, name: 'Unknown', email: '' }
+                                    : student;
+                                const key = safeStudent?._id || `student-${index}`;
+                                const name = safeStudent?.name || 'Unknown';
+                                const email = safeStudent?.email || 'Email not available';
+
+                                return (
+                                    <div
+                                        key={key}
+                                        className="flex items-center gap-3 p-3 rounded-xl
+                                        bg-surface-alt dark:bg-surface-dark"
+                                    >
+                                        <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
+                                            {name.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-text-primary dark:text-text-dark">
+                                                {name}
+                                            </p>
+                                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                {email}
+                                            </p>
+                                        </div>
                                     </div>
-                                    <span className="text-text-primary dark:text-text-dark text-xs font-medium">
-                                        {a.name}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
-                        No attendees yet. Be the first to register!
-                    </p>
-                )}
-            </Card>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                            No students registered yet
+                        </p>
+                    )}
+                </Card>
+            )}
 
             {/* Feedback / Rating */}
             {event.status === 'completed' && (

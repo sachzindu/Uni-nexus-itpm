@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { EventProvider } from './contexts/EventContext';
 import { ToastProvider } from './components/ui/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminProtectedRoute from './components/AdminProtectedRoute';
@@ -30,15 +31,18 @@ import DiscoverMatches from './pages/DiscoverMatches';
 import AdminLoginPage from './pages/AdminLoginPage';
 import AdminSignupPage from './pages/AdminSignupPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminEventEditPage from './pages/AdminEventEditPage';
+import AdminEventManagePage from './pages/AdminEventManagePage';
 
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <SocketProvider>
-            <ToastProvider>
-              <Routes>
+          <EventProvider>
+            <SocketProvider>
+              <ToastProvider>
+                <Routes>
                 {/* Public routes with layout */}
                 <Route element={<MainLayout />}>
                   <Route path="/" element={<LandingPage />} />
@@ -175,9 +179,34 @@ function App() {
                     </AdminProtectedRoute>
                   }
                 />
-              </Routes>
-            </ToastProvider>
-          </SocketProvider>
+                <Route
+                  path="/admin/events"
+                  element={
+                    <AdminProtectedRoute>
+                      <EventsPage />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/events/:id/edit"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminEventEditPage />
+                    </AdminProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/admin/events/:id/manage"
+                  element={
+                    <AdminProtectedRoute>
+                      <AdminEventManagePage />
+                    </AdminProtectedRoute>
+                  }
+                />
+                </Routes>
+              </ToastProvider>
+            </SocketProvider>
+          </EventProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
@@ -185,4 +214,3 @@ function App() {
 }
 
 export default App;
-
