@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const upload = require('../middleware/upload'); // ← LINE 1: add කරන්න
 const {
     createEvent,
     getEvents,
@@ -15,14 +16,14 @@ const {
 router
     .route('/')
     .get(getEvents)
-    .post(createEvent);
+    .post(upload.single('image'), createEvent); // ← LINE 2: upload add කළා
 
 router.get('/dashboard', getEventDashboardStats);
 
 router
     .route('/:id')
     .get(getEventById)
-    .put(updateEvent)
+    .put(upload.single('image'), updateEvent)   // ← LINE 3: upload add කළා
     .delete(deleteEvent);
 
 router.get('/:id/attendees', getEventAttendees);

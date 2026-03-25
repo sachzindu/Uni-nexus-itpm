@@ -7,7 +7,13 @@ const resolveUserId = (req) => req.user?._id || req.body?.userId;
 const createEvent = async (req, res, next) => {
     try {
         console.log('[EVENT] createEvent payload:', req.body);
-        const event = await Event.create(req.body);
+
+        const eventData = { ...req.body };
+        if (req.file) {
+            eventData.imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+        }
+
+        const event = await Event.create(eventData);
 
         res.status(201).json({
             success: true,
@@ -25,6 +31,7 @@ const getEvents = async (req, res, next) => {
         const filter = {};
 
         if (status) filter.status = status;
+        if (req.query.category) filter.category = req.query.category;
         if (search) {
             filter.$or = [
                 { title: { $regex: search, $options: 'i' } },
@@ -75,7 +82,13 @@ const updateEvent = async (req, res, next) => {
         }
 
         console.log('[EVENT] updateEvent id:', id);
-        const event = await Event.findByIdAndUpdate(id, req.body, {
+
+        const updateData = { ...req.body };
+        if (req.file) {
+            updateData.imageUrl = `/uploads/${req.file.filename}`;
+        }
+
+        const event = await Event.findByIdAndUpdate(id, updateData, {
             new: true,
             runValidators: true,
         });

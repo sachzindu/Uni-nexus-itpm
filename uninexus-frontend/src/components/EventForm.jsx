@@ -19,12 +19,26 @@ const normalizeInitialData = (initialData) => {
         location: safe.location || '',
         maxAttendees: safe.maxAttendees?.toString() || '',
         tags: Array.isArray(safe.tags) ? safe.tags.join(', ') : (safe.tags || ''),
+        category: safe.category || 'Other',
     };
 };
+
+const BACKEND = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 const EventForm = ({ initialData, onSubmit, loading }) => {
     const [formData, setFormData] = useState(() => normalizeInitialData(initialData ?? {}));
     const [errors, setErrors] = useState({});
+    const [imageFile, setImageFile] = useState(null);
+    const [preview, setPreview] = useState(
+        initialData?.imageUrl ? `${BACKEND}${initialData.imageUrl}` : null
+    );
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setImageFile(file);
+        setPreview(URL.createObjectURL(file));
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -44,16 +58,26 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
         }
 
         try {
-            await onSubmit({
-                title: (formData.title || '').trim(),
-                description: (formData.description || '').trim(),
-                eventDate: formData.eventDate || '',
-                location: (formData.location || '').trim(),
-                maxAttendees: formData.maxAttendees
-                    ? parseInt(formData.maxAttendees, 10)
-                    : undefined,
-                tags: (formData.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
-            });
+            // FormData හදන්න — image + text fields එකට
+            const data = new FormData();
+            data.append('title', formData.title.trim());
+            data.append('description', formData.description.trim());
+            data.append('eventDate', formData.eventDate);
+            data.append('location', formData.location.trim());
+            if (formData.maxAttendees) {
+                data.append('maxAttendees', parseInt(formData.maxAttendees, 10));
+            }
+            const tagsArray = (formData.tags || '')
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean);
+            tagsArray.forEach((tag) => data.append('tags[]', tag));
+            data.append('category', formData.category);
+            if (imageFile) {
+                data.append('image', imageFile);
+            }
+
+            await onSubmit(data);
         } catch (err) {
             console.error(err);
         }
@@ -117,6 +141,58 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
                     onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
                 />
             </div>
+
+            {/* Category */}
+            <div className="space-y-1">
+                <label className="text-sm font-medium text-text-primary dark:text-text-dark">
+                    Category
+                </label>
+                <select
+                    value={formData.category}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
+                    className="w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border border-border
+                        dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark
+                        focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                >
+                    {['Academic', 'Sports', 'Cultural', 'Workshop', 'Social', 'Career', 'Other'].map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Image Upload */}
+            <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-text-primary dark:text-text-dark">
+                    Event Image <span className="text-text-secondary dark:text-text-dark-secondary font-normal">(optional)</span>
+                </label>
+                <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="block w-full text-sm text-text-secondary dark:text-text-dark-secondary
+                        file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0
+                        file:text-sm file:font-medium file:bg-accent-purple/10
+                        file:text-accent-purple hover:file:bg-accent-purple/20
+                        file:cursor-pointer cursor-pointer"
+                />
+                {preview && (
+                    <div className="relative mt-2">
+                        <img
+                            src={preview}
+                            alt="Event preview"
+                            className="h-40 w-full object-cover rounded-xl border border-border dark:border-border-dark"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => { setImageFile(null); setPreview(null); }}
+                            className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg hover:bg-black/70 cursor-pointer"
+                        >
+                            Remove
+                        </button>
+                    </div>
+                )}
+            </div>
+
             <div className="flex justify-end pt-2">
                 <Button type="submit" variant="gradient" loading={loading}>
                     {initialData?.title ? 'Update Event' : 'Create Event'}

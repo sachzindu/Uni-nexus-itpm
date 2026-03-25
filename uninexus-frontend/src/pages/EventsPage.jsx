@@ -33,6 +33,7 @@ const EventsPage = () => {
     const isAdmin = user?.role === 'admin';
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('');
     const [showCreate, setShowCreate] = useState(false);
     const [creating, setCreating] = useState(false);
     const [deletingId, setDeletingId] = useState('');
@@ -40,6 +41,7 @@ const EventsPage = () => {
     const [viewingEvent, setViewingEvent] = useState(null);
     const lastErrorRef = useRef('');
     const safeEvents = Array.isArray(events) ? events : [];
+    const BACKEND = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
     useEffect(() => {
         const openCreateFromQuery = new URLSearchParams(location.search).get('create') === 'true';
@@ -152,7 +154,8 @@ const EventsPage = () => {
         const query = search.trim().toLowerCase();
         const matchesSearch = !query || title.includes(query) || description.includes(query) || locationName.includes(query);
         const matchesStatus = !statusFilter || evt?.status === statusFilter;
-        return matchesSearch && matchesStatus;
+        const matchesCategory = !categoryFilter || evt?.category === categoryFilter;
+        return matchesSearch && matchesStatus && matchesCategory;
     });
 
     const totalEvents = safeEvents.length;
@@ -229,6 +232,24 @@ const EventsPage = () => {
                 </div>
             </div>
 
+            {/* Category filter row */}
+            <div className="flex gap-2 overflow-x-auto mt-2">
+                {['', 'Academic', 'Sports', 'Cultural', 'Workshop', 'Social', 'Career', 'Other'].map((cat) => (
+                    <button
+                        key={cat}
+                        onClick={() => setCategoryFilter(cat)}
+                        className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap border
+                            transition-all cursor-pointer ${
+                            categoryFilter === cat
+                                ? 'gradient-bg text-white border-transparent'
+                                : 'border-border dark:border-border-dark text-text-primary dark:text-text-dark'
+                            }`}
+                    >
+                        {cat || 'All Categories'}
+                    </button>
+                ))}
+            </div>
+
             {isAdmin && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     <Card>
@@ -281,70 +302,120 @@ const EventsPage = () => {
                         const eventDate = formatEventDate(evt?.eventDate);
 
                         const cardContent = (
-                            <Card className="h-full flex flex-col">
-                                <div className="flex items-start justify-between mb-3 gap-2">
-                                    <Badge variant={statusColors[evt?.status] || 'default'}>
-                                        {evt?.status || 'unknown'}
-                                    </Badge>
-                                    {isRegistered && <Badge variant="success">Registered</Badge>}
-                                </div>
-                                <h3 className="font-bold text-text-primary dark:text-text-dark mb-1">
-                                    {evt?.title || 'Untitled event'}
-                                </h3>
-                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary line-clamp-2 mb-3 flex-1">
-                                    {evt?.description || 'No description'}
-                                </p>
-                                <div className="space-y-1.5 text-xs text-text-secondary dark:text-text-dark-secondary">
-                                    <div className="flex items-center gap-1.5">
-                                        <Clock size={12} />
-                                        {eventDate}
-                                    </div>
-                                    {evt?.location && (
-                                        <div className="flex items-center gap-1.5">
-                                            <MapPin size={12} />
-                                            {evt.location}
-                                        </div>
-                                    )}
-                                    {isAdmin && (
-                                        <div className="flex items-center gap-1.5">
-                                            <Users size={12} />
-                                            {evt?.attendees?.length || 0}
-                                            {evt?.maxAttendees ? ` / ${evt.maxAttendees}` : ''} attendees
-                                        </div>
-                                    )}
-                                </div>
+    <Card className="h-full flex flex-col overflow-hidden p-0">
+        {/* Image / Banner */}
+        <div className="relative w-full h-44 flex-shrink-0">
+            {evt?.imageUrl ? (
+                <img
+                    src={`${BACKEND}${evt.imageUrl}`}
+                    alt={evt?.title}
+                    className="w-full h-full object-cover"
+                />
+            ) : (
+                <div className="w-full h-full gradient-bg" />
+            )}
 
-                                {isAdmin && (
-                                    <div className="grid grid-cols-3 gap-2 mt-4">
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => setEditingEvent(evt)}
-                                        >
-                                            <Pencil size={14} />
-                                            Edit
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            onClick={() => setViewingEvent(evt)}
-                                        >
-                                            <Eye size={14} />
-                                            View
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="danger"
-                                            loading={deletingId === eventId}
-                                            onClick={() => handleDelete(eventId)}
-                                        >
-                                            <Trash2 size={14} />
-                                            Delete
-                                        </Button>
-                                    </div>
-                                )}
-                            </Card>
-                        );
+            {/* Dark overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+
+            {/* Category badge — top left */}
+            {evt?.category && evt.category !== 'Other' && (
+                <span className="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-white/20 backdrop-blur-sm text-white border border-white/30">
+                    {evt.category}
+                </span>
+            )}
+
+            {/* Status badge — top right */}
+            <div className="absolute top-3 right-3">
+                <Badge variant={statusColors[evt?.status] || 'default'}>
+                    {evt?.status || 'unknown'}
+                </Badge>
+            </div>
+
+            {/* Date overlay — bottom left */}
+            {evt?.eventDate && (
+                <div className="absolute bottom-3 left-3 bg-white/15 backdrop-blur-sm rounded-lg px-2.5 py-1.5 text-white">
+                    <p className="text-[10px] font-medium uppercase tracking-wider opacity-80">
+                        {new Date(evt.eventDate).toLocaleString('en-US', { month: 'short' })}
+                    </p>
+                    <p className="text-xl font-extrabold leading-none">
+                        {new Date(evt.eventDate).getDate()}
+                    </p>
+                </div>
+            )}
+
+            {/* Registered badge — bottom right */}
+            {isRegistered && (
+                <div className="absolute bottom-3 right-3">
+                    <Badge variant="success">Registered</Badge>
+                </div>
+            )}
+        </div>
+
+        {/* Card Body */}
+        <div className="flex flex-col flex-1 p-4">
+            <h3 className="font-bold text-text-primary dark:text-text-dark mb-1 line-clamp-1">
+                {evt?.title || 'Untitled event'}
+            </h3>
+            <p className="text-xs text-text-secondary dark:text-text-dark-secondary line-clamp-2 mb-3 flex-1">
+                {evt?.description || 'No description'}
+            </p>
+
+            <div className="space-y-1.5 text-xs text-text-secondary dark:text-text-dark-secondary mb-3">
+                <div className="flex items-center gap-1.5">
+                    <Clock size={12} className="text-accent-purple flex-shrink-0" />
+                    <span className="truncate">{eventDate}</span>
+                </div>
+                {evt?.location && (
+                    <div className="flex items-center gap-1.5">
+                        <MapPin size={12} className="text-accent-orange flex-shrink-0" />
+                        <span className="truncate">{evt.location}</span>
+                    </div>
+                )}
+                {isAdmin && (
+                    <div className="flex items-center gap-1.5">
+                        <Users size={12} className="text-success flex-shrink-0" />
+                        <span>
+                            {evt?.attendees?.length || 0}
+                            {evt?.maxAttendees ? ` / ${evt.maxAttendees}` : ''} attendees
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            {/* Admin buttons */}
+            {isAdmin && (
+                <div className="grid grid-cols-3 gap-2 mt-auto pt-2 border-t border-border dark:border-border-dark">
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setEditingEvent(evt)}
+                    >
+                        <Pencil size={14} />
+                        Edit
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setViewingEvent(evt)}
+                    >
+                        <Eye size={14} />
+                        View
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="danger"
+                        loading={deletingId === eventId}
+                        onClick={() => handleDelete(eventId)}
+                    >
+                        <Trash2 size={14} />
+                        Delete
+                    </Button>
+                </div>
+            )}
+        </div>
+    </Card>
+);
 
                         if (isAdmin) {
                             return (
@@ -432,6 +503,12 @@ const EventsPage = () => {
                                 {viewingEvent?.status || 'upcoming'}
                             </p>
                         </div>
+                    </div>
+                    <div>
+                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">Category</p>
+                        <p className="text-sm text-text-primary dark:text-text-dark">
+                            {viewingEvent?.category || 'Other'}
+                        </p>
                     </div>
                     {Array.isArray(viewingEvent?.tags) && viewingEvent.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">

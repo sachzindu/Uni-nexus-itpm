@@ -8,6 +8,12 @@ const eventSchema = new mongoose.Schema(
             trim: true,
             maxlength: [200, 'Title cannot exceed 200 characters'],
         },
+
+            imageUrl: {
+            type: String,
+            default: '',
+            trim: true,
+        },
         description: {
             type: String,
             required: [true, 'Description is required'],
@@ -39,6 +45,20 @@ const eventSchema = new mongoose.Schema(
             type: String,
             enum: ['upcoming', 'ongoing', 'completed', 'cancelled'],
             default: 'upcoming',
+        },
+        category: {
+            type: String,
+            enum: [
+                'Academic',
+                'Sports',
+                'Cultural',
+                'Workshop',
+                'Social',
+                'Career',
+                'Other',
+            ],
+            default: 'Other',
+            trim: true,
         },
     },
     {

@@ -113,8 +113,12 @@ export const postAPI = {
 export const eventAPI = {
     getAll: (params) => api.get('/events', { params }),
     getById: (id) => api.get(`/events/${id}`),
-    create: (data) => api.post('/events', data),
-    update: (id, data) => api.put(`/events/${id}`, data),
+    create: (data) => api.post('/events', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+    update: (id, data) => api.put(`/events/${id}`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }),
     delete: (id) => api.delete(`/events/${id}`),
     register: (id, data) => api.post(`/events/${id}/register`, data),
     unregister: (id) => api.post(`/events/${id}/unregister`),
