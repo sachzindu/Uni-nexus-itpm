@@ -9,8 +9,8 @@ import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
 
 const departments = [
-    'All', 'Computer Science', 'Engineering', 'Business', 'Arts & Design',
-    'Medicine', 'Law', 'Sciences', 'Education', 'Social Sciences', 'Architecture',
+    'All', 'Computing', 'Engineering', 'Business', 'Humanities and sciences',
+    'Medicine', 'Education', 'Architecture',
 ];
 
 const DiscoverPage = () => {
