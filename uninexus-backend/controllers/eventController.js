@@ -10,7 +10,7 @@ const createEvent = async (req, res, next) => {
 
         const eventData = { ...req.body };
         if (req.file) {
-            eventData.imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+            eventData.imageUrl = `/uploads/${req.file.filename}`;
         }
 
         const event = await Event.create(eventData);

@@ -43,7 +43,18 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
-app.use(helmet());
+app.use(
+    helmet({
+        crossOriginResourcePolicy: false,
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                'img-src': ["'self'", 'data:', 'http://localhost:3000', 'https:'],
+                'connect-src': ["'self'", 'http://localhost:3000', 'ws://localhost:3000', 'https:'],
+            },
+        },
+    })
+);
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(cookieParser());

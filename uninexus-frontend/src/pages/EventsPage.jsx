@@ -41,7 +41,7 @@ const EventsPage = () => {
     const [viewingEvent, setViewingEvent] = useState(null);
     const lastErrorRef = useRef('');
     const safeEvents = Array.isArray(events) ? events : [];
-    const BACKEND = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const BACKEND = import.meta.env.BACKEND_URL || 'http://localhost:3000';
 
     useEffect(() => {
         const openCreateFromQuery = new URLSearchParams(location.search).get('create') === 'true';
