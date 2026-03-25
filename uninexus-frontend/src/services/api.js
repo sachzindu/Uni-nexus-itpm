@@ -113,6 +113,7 @@ export const postAPI = {
 export const eventAPI = {
     getAll: (params) => api.get('/events', { params }),
     getById: (id) => api.get(`/events/${id}`),
+    getFeatured: () => api.get('/events/featured'),
     create: (data) => api.post('/events', data, {
         headers: { 'Content-Type': 'multipart/form-data' },
     }),
@@ -124,6 +125,8 @@ export const eventAPI = {
     unregister: (id) => api.post(`/events/${id}/unregister`),
     getAttendees: (id) => api.get(`/events/${id}/attendees`),
     getDashboardStats: () => api.get('/events/dashboard'),
+    // Admin: Get registered students for an event
+    getAttendance: (eventId) => api.get(`/events/attendance/${eventId}`),
 };
 
 // ─── Chat API ────────────────────────────────────────────────

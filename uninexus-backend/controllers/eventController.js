@@ -1,3 +1,19 @@
+// Get the featured event (upcoming/ongoing)
+const getFeaturedEvent = async (req, res, next) => {
+    try {
+        const event = await Event.findOne({
+            isFeatured: true,
+            status: { $in: ['upcoming', 'ongoing'] },
+        }).sort({ eventDate: 1 });
+
+        return res.status(200).json({
+            success: true,
+            data: event || null,
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 const mongoose = require('mongoose');
 const Event = require('../models/Event');
 
@@ -11,6 +27,14 @@ const createEvent = async (req, res, next) => {
         const eventData = { ...req.body };
         if (req.file) {
             eventData.imageUrl = `/uploads/${req.file.filename}`;
+        }
+
+        // If this event is to be featured, remove featured from all others
+        if (eventData.isFeatured === true || eventData.isFeatured === 'true') {
+            await Event.updateMany({ isFeatured: true }, { isFeatured: false });
+            eventData.isFeatured = true;
+        } else {
+            eventData.isFeatured = false;
         }
 
         const event = await Event.create(eventData);
@@ -88,6 +112,14 @@ const updateEvent = async (req, res, next) => {
             updateData.imageUrl = `/uploads/${req.file.filename}`;
         }
 
+        // If this event is to be featured, remove featured from all others
+        if (updateData.isFeatured === true || updateData.isFeatured === 'true') {
+            await Event.updateMany({ isFeatured: true, _id: { $ne: id } }, { isFeatured: false });
+            updateData.isFeatured = true;
+        } else {
+            updateData.isFeatured = false;
+        }
+
         const event = await Event.findByIdAndUpdate(id, updateData, {
             new: true,
             runValidators: true,
@@ -114,10 +146,15 @@ const deleteEvent = async (req, res, next) => {
             return res.status(400).json({ success: false, message: 'Invalid event ID' });
         }
 
-        const event = await Event.findByIdAndDelete(id);
+        // Check if the event to be deleted is featured
+        const event = await Event.findById(id);
         if (!event) {
             return res.status(404).json({ success: false, message: 'Event not found' });
         }
+        const wasFeatured = event.isFeatured;
+        await Event.findByIdAndDelete(id);
+
+        // If it was featured, no event is featured now (handled by above logic)
 
         return res.status(200).json({
             success: true,
@@ -131,7 +168,7 @@ const deleteEvent = async (req, res, next) => {
 const registerEvent = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { userId } = req.body || {};
+        const { userId, studentIdNumber, faculty } = req.body || {};
 
         console.log('Register payload:', req.body);
 
@@ -149,6 +186,31 @@ const registerEvent = async (req, res, next) => {
 
         if (!Array.isArray(event.attendees)) {
             event.attendees = [];
+        }
+
+        // Fetch user and validate or update studentIdNumber and faculty
+        const UserModel = require('../models/User');
+        const user = await UserModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        let userUpdated = false;
+        if (studentIdNumber && user.studentIdNumber !== studentIdNumber) {
+            user.studentIdNumber = studentIdNumber;
+            userUpdated = true;
+        }
+        if (faculty && user.faculty !== faculty) {
+            user.faculty = faculty;
+            userUpdated = true;
+        }
+        if (userUpdated) {
+            await user.save();
+        }
+
+        // After update, check again
+        if (!user.studentIdNumber || !user.faculty) {
+            return res.status(400).json({ success: false, message: 'User must have both studentIdNumber and faculty to register for events.' });
         }
 
         if (event.status === 'cancelled' || event.status === 'completed') {
@@ -278,4 +340,5 @@ module.exports = {
     unregisterEvent,
     getEventAttendees,
     getEventDashboardStats,
+    getFeaturedEvent,
 };

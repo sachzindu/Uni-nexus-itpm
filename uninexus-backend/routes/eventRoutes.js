@@ -11,14 +11,20 @@ const {
     unregisterEvent,
     getEventAttendees,
     getEventDashboardStats,
+    getFeaturedEvent,
 } = require('../controllers/eventController');
+const attendanceController = require('../controllers/attendanceController');
+// Attendance API for admin: Get registered students for an event
+router.get('/attendance/:eventId', attendanceController.getAttendance);
 
 router
     .route('/')
     .get(getEvents)
     .post(upload.single('image'), createEvent); // ← LINE 2: upload add කළා
 
+
 router.get('/dashboard', getEventDashboardStats);
+router.get('/featured', getFeaturedEvent);
 
 router
     .route('/:id')

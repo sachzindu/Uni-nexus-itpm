@@ -53,10 +53,10 @@ export const EventProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const fetchEvents = useCallback(async () => {
+    const fetchEvents = useCallback(async (params = {}) => {
         setLoading(true);
         try {
-            const response = await eventAPI.getAll({ limit: 1000 });
+            const response = await eventAPI.getAll({ ...params, limit: 1000 });
             const normalizedEvents = extractEvents(response);
             const safeEvents = Array.isArray(normalizedEvents) ? normalizedEvents : [];
             setEvents([...(safeEvents || [])]);

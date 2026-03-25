@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import Input from '../components/ui/Input';
+// Use the same backend URL logic as EventsPage
+const BACKEND = import.meta.env.BACKEND_URL || 'http://localhost:3000';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -14,7 +17,9 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import StarRating from '../components/ui/StarRating';
+
 import Loader from '../components/ui/Loader';
+import Skeleton from '../components/ui/Skeleton';
 
 const EventDetailPage = () => {
     const { id } = useParams();
@@ -30,12 +35,35 @@ const EventDetailPage = () => {
     const isAdmin = user?.role === 'admin';
 
     const event = getEventById(id);
+    // Debug: log event object to verify imageUrl
+    useEffect(() => {
+        if (event) {
+            // eslint-disable-next-line no-console
+            console.log('Event detail:', event);
+        }
+    }, [event]);
     const missingToastShownRef = useRef(false);
     const [detailLoading, setDetailLoading] = useState(true);
     const [registering, setRegistering] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [regId, setRegId] = useState('');
     const [userRating, setUserRating] = useState(0);
+    // Registration modal state
+    const [showRegModal, setShowRegModal] = useState(false);
+    const [faculty, setFaculty] = useState('');
+    const [studentId, setStudentId] = useState('');
+    const [formError, setFormError] = useState('');
+
+    // Faculties list (from OnboardingPage.jsx)
+    const faculties = [
+        'Computing',
+        'Engineering',
+        'Business',
+        'Humanities and sciences',
+        'Medicine',
+        'William anjilies Institute',
+        'Architecture',
+    ];
 
     useEffect(() => {
         let active = true;
@@ -83,22 +111,40 @@ const EventDetailPage = () => {
         (a) => (typeof a === 'string' ? a : a._id) === user?._id
     );
 
-    const handleRegister = async () => {
+    // Open modal instead of direct register
+    const handleRegister = () => {
+        setShowRegModal(true);
+        setFormError('');
+    };
+
+    // Validate and submit registration
+    const handleRegSubmit = async (e) => {
+        e.preventDefault();
+        setFormError('');
+        // Validate studentId: 10 chars, alphanumeric
+        if (!faculty) {
+            setFormError('Please select your faculty.');
+            return;
+        }
+        if (!/^[A-Za-z0-9]{10}$/.test(studentId)) {
+            setFormError('Student ID must be 10 letters/numbers.');
+            return;
+        }
         setRegistering(true);
         try {
             if (!user?._id) {
                 throw new Error('Valid user id required');
             }
-
-            console.log('User ID:', user._id);
-            await eventAPI.register(id, { userId: user._id });
+            await eventAPI.register(id, {
+                userId: user._id,
+                faculty,
+                studentIdNumber: studentId,
+            });
             const refetched = await eventAPI.getById(id);
             const nextEvent = refetched?.data?.event || refetched?.data || refetched?.event || refetched;
-
             if (!nextEvent?._id) {
                 throw new Error('Unable to register for this event');
             }
-
             await fetchEventById(id);
             // Generate a unique registration ID
             const uniqueId = `UNI-${Date.now().toString(36).toUpperCase()}-${Math.random()
@@ -107,9 +153,12 @@ const EventDetailPage = () => {
                 .toUpperCase()}`;
             setRegId(uniqueId);
             setShowSuccess(true);
+            setShowRegModal(false);
+            setFaculty('');
+            setStudentId('');
         } catch (err) {
             console.error(err);
-            toast.error(err.message || 'Registration failed');
+            setFormError(err.message || 'Registration failed');
         } finally {
             setRegistering(false);
         }
@@ -133,21 +182,14 @@ const EventDetailPage = () => {
         toast.success('Registration ID copied!');
     };
 
-    if (loading || detailLoading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <Loader size="lg" />
-            </div>
-        );
-    }
 
-    if (!event) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <Loader size="lg" />
-            </div>
-        );
-    }
+
+    // Always render the hero section container to avoid layout shift
+    // Use a fixed aspect ratio for the hero section (16:9)
+    const HERO_ASPECT_RATIO = 'aspect-[16/9]';
+
+    // Show skeleton loader for hero section while loading
+    const showSkeleton = loading || detailLoading || !event;
 
     const statusColors = {
         upcoming: 'purple',
@@ -156,38 +198,79 @@ const EventDetailPage = () => {
         cancelled: 'error',
     };
 
+
+
+
+    // Use the same logic as EventsPage for event image
+    const heroImage = event?.imageUrl ? `${BACKEND}${event.imageUrl}` : null;
+    const fallbackImage = 'https://via.placeholder.com/800x300?text=No+Image';
+
+
     return (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Back */}
             <button
                 onClick={() => navigate('/events')}
-                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary
-          hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
+                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
             >
                 <ArrowLeft size={18} />
                 <span className="text-sm font-medium">Back to Events</span>
             </button>
 
-            {/* Event Header */}
+            {/* Event Hero Image Banner (Fixed aspect ratio, skeleton, overlay, hover) */}
+            <div
+                className={`relative w-full rounded-3xl overflow-hidden mb-6 group transition-all duration-300 ${HERO_ASPECT_RATIO}`}
+                style={{ minHeight: 220, maxHeight: 500 }}
+            >
+                {showSkeleton ? (
+                    <Skeleton className="w-full h-full" />
+                ) : (
+                    <>
+                        {/* Image Layer */}
+                        <img
+                            src={heroImage || fallbackImage}
+                            alt={event.title}
+                            className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = fallbackImage;
+                            }}
+                            style={{ minHeight: 220, maxHeight: 500 }}
+                        />
+                        {/* Overlay Layer */}
+                        <div
+                            className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 group-hover:opacity-80"
+                        />
+                        {/* Status badge on image */}
+                        <div className="absolute top-4 left-4 z-10">
+                            <Badge variant={statusColors[event.status] || 'default'} className="text-sm">
+                                {event.status}
+                            </Badge>
+                        </div>
+                        {/* Content Layer: Title and date */}
+                        <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2">
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-white drop-shadow mb-1">
+                                {event.title}
+                            </h1>
+                            <div className="flex items-center gap-2 text-white/90 text-sm">
+                                <Clock size={16} className="text-accent-purple" />
+                                {new Date(event.eventDate).toLocaleDateString('en-US', {
+                                    month: 'short', day: 'numeric', year: 'numeric',
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* Event Header (rest of details) */}
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white dark:bg-surface-dark-alt rounded-3xl card-shadow overflow-hidden mb-6"
             >
-                {/* Banner gradient */}
-                <div className="h-32 gradient-bg relative">
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute bottom-4 left-6">
-                        <Badge variant={statusColors[event.status] || 'default'} className="text-sm">
-                            {event.status}
-                        </Badge>
-                    </div>
-                </div>
-
                 <div className="p-6 md:p-8">
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-text-dark mb-2">
-                        {event.title}
-                    </h1>
                     <p className="text-text-secondary dark:text-text-dark-secondary mb-6">
                         {event.description || 'No description provided.'}
                     </p>
@@ -264,7 +347,6 @@ const EventDetailPage = () => {
                                     variant="gradient"
                                     size="lg"
                                     onClick={handleRegister}
-                                    loading={registering}
                                     disabled={event.isFull}
                                 >
                                     <Ticket size={18} />
@@ -275,6 +357,52 @@ const EventDetailPage = () => {
                     )}
                 </div>
             </motion.div>
+
+            {/* Registration Modal for student info */}
+            <Modal
+                isOpen={showRegModal}
+                onClose={() => { setShowRegModal(false); setFormError(''); }}
+                title="Complete Registration"
+                size="sm"
+            >
+                <form onSubmit={handleRegSubmit} className="space-y-5">
+                    <div>
+                        <label className="block text-sm font-medium text-text-primary dark:text-text-dark mb-1.5">
+                            Faculty
+                        </label>
+                        <select
+                            value={faculty}
+                            onChange={e => setFaculty(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-white dark:bg-surface-dark border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                        >
+                            <option value="">Select faculty</option>
+                            {faculties.map(f => (
+                                <option key={f} value={f}>{f}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <Input
+                        label="Student ID Number"
+                        value={studentId}
+                        onChange={e => setStudentId(e.target.value)}
+                        maxLength={10}
+                        minLength={10}
+                        pattern="[A-Za-z0-9]{10}"
+                        placeholder="10 characters (letters & numbers)"
+                        autoComplete="off"
+                    />
+                    {formError && <div className="text-error text-sm">{formError}</div>}
+                    <Button
+                        variant="gradient"
+                        type="submit"
+                        loading={registering}
+                        className="w-full"
+                    >
+                        Register
+                    </Button>
+                </form>
+
+            </Modal>
 
             {/* Registered Students (Admin Only) */}
             {isAdmin && (

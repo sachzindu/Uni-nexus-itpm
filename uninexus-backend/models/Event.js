@@ -14,6 +14,10 @@ const eventSchema = new mongoose.Schema(
             default: '',
             trim: true,
         },
+        isFeatured: {
+            type: Boolean,
+            default: false,
+        },
         description: {
             type: String,
             required: [true, 'Description is required'],

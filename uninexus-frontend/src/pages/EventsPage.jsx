@@ -13,8 +13,9 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { Skeleton } from '../components/ui/Loader';
+import Skeleton from '../components/ui/Skeleton';
 import EventForm from '../components/EventForm';
+import { eventAPI } from '../services/api';
 
 const EventsPage = () => {
     const { user } = useAuth();
@@ -39,9 +40,63 @@ const EventsPage = () => {
     const [deletingId, setDeletingId] = useState('');
     const [editingEvent, setEditingEvent] = useState(null);
     const [viewingEvent, setViewingEvent] = useState(null);
+    // Admin: Registered Students modal state
+    const [registeredStudents, setRegisteredStudents] = useState([]);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState(null);
+
+    // Admin: Fetch registered students for event
+    const fetchRegisteredStudents = async (eventId) => {
+        setStudentsLoading(true);
+        setStudentsError(null);
+        try {
+            const data = await eventAPI.getAttendance(eventId);
+            setRegisteredStudents(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setStudentsError(err.message || 'Failed to fetch registered students');
+            setRegisteredStudents([]);
+        } finally {
+            setStudentsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (viewingEvent?._id) {
+            fetchRegisteredStudents(viewingEvent._id);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewingEvent?.attendees?.length, viewingEvent?._id]);
+    const [featuredEvent, setFeaturedEvent] = useState(null);
+    const [featuredLoading, setFeaturedLoading] = useState(false);
     const lastErrorRef = useRef('');
     const safeEvents = Array.isArray(events) ? events : [];
     const BACKEND = import.meta.env.BACKEND_URL || 'http://localhost:3000';
+    // Fetch featured event (with fallback to nearest upcoming if none)
+    useEffect(() => {
+        if (!isAdmin) {
+            setFeaturedLoading(true);
+            eventAPI.getFeatured()
+                .then((res) => {
+                    if (res?.data) {
+                        setFeaturedEvent(res.data);
+                    } else {
+                        // Fallback: find nearest upcoming event
+                        const upcoming = safeEvents
+                            .filter((evt) => evt.status === 'upcoming' && new Date(evt.eventDate) > new Date())
+                            .sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
+                        setFeaturedEvent(upcoming[0] || null);
+                    }
+                })
+                .catch(() => {
+                    // On error, fallback to nearest upcoming event
+                    const upcoming = safeEvents
+                        .filter((evt) => evt.status === 'upcoming' && new Date(evt.eventDate) > new Date())
+                        .sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate));
+                    setFeaturedEvent(upcoming[0] || null);
+                })
+                .finally(() => setFeaturedLoading(false));
+        }
+    }, [isAdmin, safeEvents]);
 
     useEffect(() => {
         const openCreateFromQuery = new URLSearchParams(location.search).get('create') === 'true';
@@ -203,7 +258,101 @@ const EventsPage = () => {
                 </div>
             </motion.div>
 
+            {/* ── Featured Hero Banner — Student side only ── */}
+
+            {/* ── Featured Hero Banner — Student side only ── */}
+            {!isAdmin && (
+                <div className="mb-8">
+                    {/* Always render the container to prevent layout jump */}
+                    <div
+                        className="relative w-full rounded-3xl overflow-hidden group transition-all duration-300 aspect-[16/9] min-h-[220px] max-h-[500px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                        style={{ minHeight: 220, maxHeight: 500 }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={featuredEvent ? `View details for ${featuredEvent.title}` : 'Featured event'}
+                        onClick={() => featuredEvent && navigate(`/events/${featuredEvent._id}`)}
+                        onKeyDown={(e) => {
+                            if (featuredEvent && (e.key === 'Enter' || e.key === ' ')) {
+                                e.preventDefault();
+                                navigate(`/events/${featuredEvent._id}`);
+                            }
+                        }}
+                    >
+                        {featuredLoading || !featuredEvent ? (
+                            <Skeleton className="w-full h-full" />
+                        ) : (
+                            <>
+                                {/* Image Layer */}
+                                <img
+                                    src={featuredEvent.imageUrl ? `${BACKEND}${featuredEvent.imageUrl}` : 'https://via.placeholder.com/800x300?text=No+Image'}
+                                    alt={featuredEvent.title}
+                                    className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
+                                    loading="lazy"
+                                    onError={(e) => {
+                                        e.target.onerror = null;
+                                        e.target.src = 'https://via.placeholder.com/800x300?text=No+Image';
+                                    }}
+                                    style={{ minHeight: 220, maxHeight: 500 }}
+                                />
+                                {/* Overlay Layer */}
+                                <div
+                                    className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 group-hover:opacity-80"
+                                />
+                                {/* Content Layer */}
+                                <div className="absolute inset-0 flex flex-col justify-end p-6 sm:p-8 z-10">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-accent-purple text-white">
+                                            Featured
+                                        </span>
+                                        {featuredEvent.eventDate && (
+                                            <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/15 backdrop-blur-sm text-white border border-white/20">
+                                                🗓{' '}
+                                                {new Date(featuredEvent.eventDate).toLocaleDateString('en-US', {
+                                                    weekday: 'short',
+                                                    month: 'short',
+                                                    day: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                })}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <h2 className="text-2xl sm:text-3xl font-extrabold text-white mb-1 leading-tight">
+                                        {featuredEvent.title}
+                                    </h2>
+                                    <p className="text-sm text-white/75 line-clamp-2 mb-4 max-w-xl">
+                                        {featuredEvent.description}
+                                    </p>
+
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <span
+                                            className="px-5 py-2.5 rounded-xl font-semibold text-sm gradient-bg text-white hover:opacity-90 transition-opacity cursor-pointer select-none"
+                                        >
+                                            {featuredEvent.status === 'upcoming' ? 'Grab Your Ticket' : 'View Details'}
+                                        </span>
+                                        {featuredEvent.location && (
+                                            <span className="flex items-center gap-1.5 text-xs text-white/70">
+                                                <MapPin size={13} />
+                                                {featuredEvent.location}
+                                            </span>
+                                        )}
+                                        {Array.isArray(featuredEvent.attendees) && (
+                                            <span className="flex items-center gap-1.5 text-xs text-white/70">
+                                                <Users size={13} />
+                                                {featuredEvent.attendees.length} going
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Search & Filters */}
+
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <form onSubmit={handleSearch} className="flex-1 relative">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
@@ -215,64 +364,87 @@ const EventsPage = () => {
                         className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-surface-dark-alt border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
                     />
                 </form>
-                <div className="flex gap-2 overflow-x-auto">
-                    {['', 'upcoming', 'ongoing', 'completed', 'cancelled'].map((s) => (
-                        <button
-                            key={s}
-                            onClick={() => setStatusFilter(s)}
-                            className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap border
-                transition-all cursor-pointer ${statusFilter === s
-                                    ? 'gradient-bg text-white border-transparent'
-                                    : 'border-border dark:border-border-dark text-text-primary dark:text-text-dark'
-                                }`}
-                        >
-                            {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All'}
-                        </button>
-                    ))}
+                <div className="min-w-[180px]">
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                    >
+                        <option value="">All Events</option>
+                        <option value="upcoming">Upcoming</option>
+                        <option value="ongoing">Ongoing</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
                 </div>
             </div>
 
-            {/* Category filter row */}
-            <div className="flex gap-2 overflow-x-auto mt-2">
-                {['', 'Academic', 'Sports', 'Cultural', 'Workshop', 'Social', 'Career', 'Other'].map((cat) => (
-                    <button
-                        key={cat}
-                        onClick={() => setCategoryFilter(cat)}
-                        className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap border
-                            transition-all cursor-pointer ${
-                            categoryFilter === cat
-                                ? 'gradient-bg text-white border-transparent'
-                                : 'border-border dark:border-border-dark text-text-primary dark:text-text-dark'
-                            }`}
+
+            {/* Enhanced Category filter row */}
+            <div className="glass card-shadow rounded-2xl px-4 py-3 flex items-center gap-2 overflow-x-auto mt-2 mb-6 animate-slide-up relative">
+                {[
+                    { label: 'All Categories', value: '', icon: <Calendar size={16} className="text-accent-purple" /> },
+                    { label: 'Academic', value: 'Academic', icon: <span role="img" aria-label="Academic">🎓</span> },
+                    { label: 'Sports', value: 'Sports', icon: <span role="img" aria-label="Sports">🏅</span> },
+                    { label: 'Cultural', value: 'Cultural', icon: <span role="img" aria-label="Cultural">🎭</span> },
+                    { label: 'Workshop', value: 'Workshop', icon: <span role="img" aria-label="Workshop">🛠️</span> },
+                    { label: 'Social', value: 'Social', icon: <span role="img" aria-label="Social">🤝</span> },
+                    { label: 'Career', value: 'Career', icon: <span role="img" aria-label="Career">💼</span> },
+                    { label: 'Other', value: 'Other', icon: <span role="img" aria-label="Other">✨</span> },
+                ].map((cat) => (
+                    <motion.button
+                        key={cat.value}
+                        onClick={() => setCategoryFilter(cat.value)}
+                        whileHover={{ scale: 1.08 }}
+                        whileTap={{ scale: 0.97 }}
+                        className={`flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-semibold whitespace-nowrap border transition-all cursor-pointer shadow-sm ${categoryFilter === cat.value ? 'gradient-bg text-white border-transparent animate-pulse-glow' : 'border-border dark:border-border-dark text-text-primary dark:text-text-dark bg-white/70 dark:bg-surface-dark-alt/80'}`}
+                        style={{ minWidth: 0 }}
                     >
-                        {cat || 'All Categories'}
-                    </button>
+                        {cat.icon}
+                        {cat.label}
+                    </motion.button>
                 ))}
+                {(categoryFilter || statusFilter || search) && (
+                    <button
+                        onClick={() => { setCategoryFilter(''); setStatusFilter(''); setSearch(''); }}
+                        className="ml-2 px-3 py-2 rounded-xl text-sm font-semibold border border-accent-purple text-accent-purple bg-white/80 dark:bg-surface-dark-alt/80 hover:bg-accent-purple hover:text-white transition-colors"
+                        style={{ minWidth: 0 }}
+                    >
+                        Clear Filters
+                    </button>
+                )}
             </div>
+
+            {/* No events found message */}
+            {filteredEvents.length === 0 && (
+                <div className="text-center text-text-secondary dark:text-text-dark-secondary py-12 text-lg">
+                    No events found
+                </div>
+            )}
 
             {isAdmin && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                     <Card>
-                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-1">
+                        <p className="text-base text-text-secondary dark:text-text-dark-secondary mb-2 font-semibold">
                             Total Events
                         </p>
-                        <p className="text-2xl font-extrabold text-text-primary dark:text-text-dark">
+                        <p className="text-4xl font-extrabold text-text-primary dark:text-text-dark">
                             {totalEvents}
                         </p>
                     </Card>
                     <Card>
-                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-1">
+                        <p className="text-base text-text-secondary dark:text-text-dark-secondary mb-2 font-semibold">
                             Total Registrations
                         </p>
-                        <p className="text-2xl font-extrabold text-text-primary dark:text-text-dark">
+                        <p className="text-4xl font-extrabold text-text-primary dark:text-text-dark">
                             {totalRegistrations}
                         </p>
                     </Card>
                     <Card>
-                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary mb-1">
+                        <p className="text-base text-text-secondary dark:text-text-dark-secondary mb-2 font-semibold">
                             Upcoming Events
                         </p>
-                        <p className="text-2xl font-extrabold text-text-primary dark:text-text-dark">
+                        <p className="text-4xl font-extrabold text-text-primary dark:text-text-dark">
                             {upcomingEvents}
                         </p>
                     </Card>
@@ -361,26 +533,23 @@ const EventsPage = () => {
                 {evt?.description || 'No description'}
             </p>
 
-            <div className="space-y-1.5 text-xs text-text-secondary dark:text-text-dark-secondary mb-3">
-                <div className="flex items-center gap-1.5">
-                    <Clock size={12} className="text-accent-purple flex-shrink-0" />
-                    <span className="truncate">{eventDate}</span>
+            <div className="space-y-2 text-base font-medium text-text-secondary dark:text-text-dark-secondary mb-3">
+                <div className="flex items-center gap-2">
+                    <Clock size={18} className="text-accent-purple flex-shrink-0" />
+                    <span className="truncate tracking-wide">{eventDate}</span>
                 </div>
-                {evt?.location && (
-                    <div className="flex items-center gap-1.5">
-                        <MapPin size={12} className="text-accent-orange flex-shrink-0" />
-                        <span className="truncate">{evt.location}</span>
+                <div className="flex items-center gap-2 justify-between w-full">
+                    {evt?.location && (
+                        <div className="flex items-center gap-2">
+                            <MapPin size={18} className="text-accent-orange flex-shrink-0" />
+                            <span className="truncate tracking-wide">{evt.location}</span>
+                        </div>
+                    )}
+                    <div className="flex items-center gap-1.5 ml-auto">
+                        <Users size={16} className="text-success flex-shrink-0" />
+                        <span className="font-semibold">{evt?.attendees?.length || 0} </span>
                     </div>
-                )}
-                {isAdmin && (
-                    <div className="flex items-center gap-1.5">
-                        <Users size={12} className="text-success flex-shrink-0" />
-                        <span>
-                            {evt?.attendees?.length || 0}
-                            {evt?.maxAttendees ? ` / ${evt.maxAttendees}` : ''} attendees
-                        </span>
-                    </div>
-                )}
+                </div>
             </div>
 
             {/* Admin buttons */}
@@ -397,7 +566,12 @@ const EventsPage = () => {
                     <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setViewingEvent(evt)}
+                        onClick={async () => {
+                            setViewingEvent(evt);
+                            if (isAdmin && evt?._id) {
+                                await fetchRegisteredStudents(evt._id);
+                            }
+                        }}
                     >
                         <Eye size={14} />
                         View
@@ -466,7 +640,10 @@ const EventsPage = () => {
             {/* View Modal */}
             <Modal
                 isOpen={!!viewingEvent}
-                onClose={() => setViewingEvent(null)}
+                onClose={() => {
+                    setViewingEvent(null);
+                    setShowRegisteredStudents(false);
+                }}
                 title={viewingEvent?.title || 'Event Details'}
                 size="md"
             >
@@ -517,6 +694,38 @@ const EventsPage = () => {
                                     {tag}
                                 </Badge>
                             ))}
+                        </div>
+                    )}
+                    {/* Admin: Show Registered Students button and list */}
+                    {isAdmin && viewingEvent?._id && (
+                        <div>
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        // Download CSV of registered students
+                                        const csvRows = [
+                                            ['Student ID', 'Faculty'],
+                                            ...registeredStudents.map(s => [s.studentId, s.faculty])
+                                        ];
+                                        const csvContent = csvRows.map(row => row.map(field => `"${(field ?? '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
+                                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                                        const url = URL.createObjectURL(blob);
+                                        const a = document.createElement('a');
+                                        a.href = url;
+                                        a.download = `registered_students_${viewingEvent?._id || 'event'}.csv`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        setTimeout(() => {
+                                            document.body.removeChild(a);
+                                            URL.revokeObjectURL(url);
+                                        }, 100);
+                                    }}
+                                    disabled={!registeredStudents || registeredStudents.length === 0}
+                                >
+                                    Download Registered Students
+                                </Button>
+                            </div>
                         </div>
                     )}
                     <div className="flex justify-end">

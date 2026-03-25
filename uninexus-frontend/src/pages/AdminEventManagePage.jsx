@@ -38,6 +38,31 @@ const AdminEventManagePage = () => {
     const [attendanceState, setAttendanceState] = useState({});
     const [loading, setLoading] = useState(true);
 
+    // Registered Students (Attendees) feature
+    const [showRegisteredStudents, setShowRegisteredStudents] = useState(false);
+    const [registeredStudents, setRegisteredStudents] = useState([]);
+    const [studentsLoading, setStudentsLoading] = useState(false);
+    const [studentsError, setStudentsError] = useState(null);
+    // Handler for fetching registered students (studentId, faculty)
+    const handleShowRegisteredStudents = async () => {
+        if (showRegisteredStudents) {
+            setShowRegisteredStudents(false);
+            return;
+        }
+        setShowRegisteredStudents(true);
+        setStudentsLoading(true);
+        setStudentsError(null);
+        try {
+            const data = await eventAPI.getAttendance(id);
+            setRegisteredStudents(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setStudentsError(err.message || 'Failed to fetch registered students');
+            setRegisteredStudents([]);
+        } finally {
+            setStudentsLoading(false);
+        }
+    };
+
     useEffect(() => {
         const fetchEventDetails = async () => {
             setLoading(true);
@@ -168,8 +193,43 @@ const AdminEventManagePage = () => {
 
                 <Card hover={false}>
                     <h2 className="text-lg font-bold text-text-primary dark:text-text-dark mb-4">
-                        Registered Users
+                        Attendees
                     </h2>
+                    <button
+                        className="mb-4 px-4 py-2 rounded bg-accent-purple text-white font-semibold hover:bg-accent-purple/90 focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                        onClick={handleShowRegisteredStudents}
+                        type="button"
+                    >
+                        {showRegisteredStudents ? 'Hide Registered Students' : 'Show Registered Students'}
+                    </button>
+                    {showRegisteredStudents && (
+                        <div className="mb-4">
+                            {studentsLoading ? (
+                                <div className="py-4 text-center text-text-secondary dark:text-text-dark-secondary">Loading...</div>
+                            ) : studentsError ? (
+                                <div className="py-4 text-center text-error">{studentsError}</div>
+                            ) : registeredStudents.length === 0 ? (
+                                <div className="py-4 text-center text-text-secondary dark:text-text-dark-secondary">No registered students</div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {registeredStudents.map((student, idx) => (
+                                        <div
+                                            key={student.studentId || idx}
+                                            className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-surface-alt dark:bg-surface-dark border border-border dark:border-border-dark"
+                                        >
+                                            <span className="font-mono text-base text-text-primary dark:text-text-dark">
+                                                Student ID: <span className="font-semibold">{student.studentId}</span>
+                                            </span>
+                                            <span className="text-base text-text-secondary dark:text-text-dark-secondary">
+                                                Faculty: <span className="font-semibold">{student.faculty}</span>
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {/* Existing attendee list (do not change) */}
                     {attendees.length > 0 ? (
                         <div className="space-y-3">
                             {attendees.map((attendee) => (

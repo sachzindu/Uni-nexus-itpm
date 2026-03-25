@@ -20,6 +20,8 @@ const normalizeInitialData = (initialData) => {
         maxAttendees: safe.maxAttendees?.toString() || '',
         tags: Array.isArray(safe.tags) ? safe.tags.join(', ') : (safe.tags || ''),
         category: safe.category || 'Other',
+        isFeatured: safe.isFeatured || false,
+        status: safe.status || 'upcoming',
     };
 };
 
@@ -58,7 +60,7 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
         }
 
         try {
-            // FormData හදන්න — image + text fields එකට
+            // FormData — image + text fields
             const data = new FormData();
             data.append('title', formData.title.trim());
             data.append('description', formData.description.trim());
@@ -73,6 +75,8 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
                 .filter(Boolean);
             tagsArray.forEach((tag) => data.append('tags[]', tag));
             data.append('category', formData.category);
+            data.append('isFeatured', formData.isFeatured);
+            data.append('status', formData.status);
             if (imageFile) {
                 data.append('image', imageFile);
             }
@@ -142,22 +146,61 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
                 />
             </div>
 
-            {/* Category */}
-            <div className="space-y-1">
-                <label className="text-sm font-medium text-text-primary dark:text-text-dark">
-                    Category
-                </label>
-                <select
-                    value={formData.category}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                    className="w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border border-border
-                        dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark
-                        focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+
+
+            {/* Category & Status */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                    <label className="text-sm font-medium text-text-primary dark:text-text-dark">
+                        Category
+                    </label>
+                    <select
+                        value={formData.category}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
+                        className="w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                    >
+                        {['Academic', 'Sports', 'Cultural', 'Workshop', 'Social', 'Career', 'Other'].map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="space-y-1">
+                    <label className="text-sm font-medium text-text-primary dark:text-text-dark">
+                        Status
+                    </label>
+                    <select
+                        value={formData.status}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value }))}
+                        className="w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                    >
+                        {['upcoming', 'ongoing', 'completed', 'cancelled'].map((status) => (
+                            <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* Featured Event Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border dark:border-border-dark">
+                <div>
+                    <p className="text-sm font-medium text-text-primary dark:text-text-dark">
+                        Featured Event
+                    </p>
+                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                        Show as hero banner on the student events page
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, isFeatured: !prev.isFeatured }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer flex-shrink-0
+                        ${formData.isFeatured ? 'bg-accent-purple' : 'bg-border dark:bg-border-dark'}`}
                 >
-                    {['Academic', 'Sports', 'Cultural', 'Workshop', 'Social', 'Career', 'Other'].map((cat) => (
-                        <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                </select>
+                    <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform
+                            ${formData.isFeatured ? 'translate-x-6' : 'translate-x-1'}`}
+                    />
+                </button>
             </div>
 
             {/* Image Upload */}

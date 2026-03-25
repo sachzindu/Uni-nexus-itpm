@@ -22,16 +22,18 @@ const DashboardPage = () => {
     const { user } = useAuth();
     const [recommendations, setRecommendations] = useState([]);
     const [events, setEvents] = useState([]);
+    const [featuredEvent, setFeaturedEvent] = useState(null);
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [recRes, evtRes, grpRes] = await Promise.allSettled([
+                const [recRes, evtRes, grpRes, featRes] = await Promise.allSettled([
                     userAPI.getRecommendations(6),
                     eventAPI.getAll({ upcoming: 'true', limit: 4 }),
                     groupAPI.getAll({ limit: 4 }),
+                    eventAPI.getFeatured(),
                 ]);
 
                 if (recRes.status === 'fulfilled') {
@@ -45,6 +47,9 @@ const DashboardPage = () => {
                 }
                 if (grpRes.status === 'fulfilled') {
                     setGroups(grpRes.value?.data?.groups || []);
+                }
+                if (featRes.status === 'fulfilled') {
+                    setFeaturedEvent(featRes.value?.data || null);
                 }
             } catch {
                 // Silently handle errors for dashboard
@@ -212,6 +217,40 @@ const DashboardPage = () => {
 
                 {/* Sidebar: Events & Groups */}
                 <div className="space-y-8">
+                    {/* Featured Event */}
+                    {featuredEvent && (
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-lg font-bold text-accent-orange flex items-center gap-2">
+                                    <Sparkles size={18} className="text-accent-orange" />
+                                    Featured Event
+                                </h2>
+                                <Link to={`/events/${featuredEvent._id}`} className="text-sm font-medium text-accent-purple hover:underline">
+                                    View
+                                </Link>
+                            </div>
+                            <Card className="!p-4 mb-4 gradient-bg text-white">
+                                <div className="mb-2">
+                                    <p className="font-semibold text-base mb-1">{featuredEvent.title}</p>
+                                    <div className="flex items-center gap-2 text-xs opacity-80">
+                                        <Clock size={12} />
+                                        {new Date(featuredEvent.eventDate).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </div>
+                                    <div className="text-xs opacity-80 mt-1">
+                                        {featuredEvent.location}
+                                    </div>
+                                </div>
+                                <div className="text-xs opacity-90 line-clamp-3 mb-1">
+                                    {featuredEvent.description}
+                                </div>
+                            </Card>
+                        </div>
+                    )}
                     {/* Upcoming Events */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
@@ -237,24 +276,27 @@ const DashboardPage = () => {
                             </div>
                         ) : events.length > 0 ? (
                             <div className="space-y-3">
-                                {events.map((evt) => (
-                                    <Link key={evt._id} to={`/events/${evt._id}`}>
-                                        <Card className="!p-4 mb-3">
-                                            <p className="font-semibold text-sm text-text-primary dark:text-text-dark mb-1">
-                                                {evt.title}
-                                            </p>
-                                            <div className="flex items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
-                                                <Clock size={12} />
-                                                {new Date(evt.eventDate).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
-                                            </div>
-                                        </Card>
-                                    </Link>
-                                ))}
+                                {events
+                                    .filter(evt => !featuredEvent || evt._id !== featuredEvent._id)
+                                    .slice(0, 2)
+                                    .map((evt) => (
+                                        <Link key={evt._id} to={`/events/${evt._id}`}>
+                                            <Card className="!p-4 mb-3">
+                                                <p className="font-semibold text-sm text-text-primary dark:text-text-dark mb-1">
+                                                    {evt.title}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                    <Clock size={12} />
+                                                    {new Date(evt.eventDate).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })}
+                                                </div>
+                                            </Card>
+                                        </Link>
+                                    ))}
                             </div>
                         ) : (
                             <Card hover={false} className="text-center py-8 !p-4">
