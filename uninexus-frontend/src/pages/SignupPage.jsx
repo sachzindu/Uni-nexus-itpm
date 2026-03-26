@@ -24,7 +24,8 @@ const SignupPage = () => {
         const errs = {};
         if (!form.name.trim()) errs.name = 'Name is required';
         if (!form.email) errs.email = 'Email is required';
-        else if (!/\S+@\S+\.\S+/.test(form.email)) errs.email = 'Invalid email';
+        else if (!/^it\d{8}@sliit\.lk$/i.test(form.email.trim()))
+            errs.email = 'Email must be in the format itXXXXXXXX@sliit.lk';
         if (!form.password) errs.password = 'Password is required';
         else if (form.password.length < 6)
             errs.password = 'Password must be at least 6 characters';
