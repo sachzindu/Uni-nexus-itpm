@@ -10,10 +10,12 @@ import { chatGroupAPI, chatAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { Skeleton } from '../components/ui/Loader';
+import { useToast } from '../components/ui/Toast';
 
 const ChatPage = () => {
     const { user } = useAuth();
     const { socket, onlineUsers, joinChatGroup, leaveChatGroup, sendChatGroupMessage } = useSocket();
+    const toast = useToast();
 
     const [chatGroups, setChatGroups] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
@@ -62,6 +64,10 @@ const ChatPage = () => {
     useEffect(() => {
         if (!socket) return;
 
+        const handleSocketError = (payload) => {
+            toast.error(payload?.message || 'Failed to send message');
+        };
+
         const handleNewMessage = (msg) => {
             setMessages((prev) => [...prev, msg]);
         };
@@ -84,11 +90,13 @@ const ChatPage = () => {
         socket.on('newChatGroupMessage', handleNewMessage);
         socket.on('userChatGroupTyping', handleTyping);
         socket.on('userChatGroupStopTyping', handleStopTyping);
+        socket.on('error', handleSocketError);
 
         return () => {
             socket.off('newChatGroupMessage', handleNewMessage);
             socket.off('userChatGroupTyping', handleTyping);
             socket.off('userChatGroupStopTyping', handleStopTyping);
+            socket.off('error', handleSocketError);
         };
     }, [socket, user]);
 
@@ -112,7 +120,8 @@ const ChatPage = () => {
 
         try {
             const res = await chatAPI.getChatGroupMessages(chat._id);
-            setMessages(res.data || []);
+            // chatAPI returns { success: true, data: { messages: [...], hasMore, nextCursor } }
+            setMessages(res.data?.messages || []);
         } catch {
             setMessages([]);
         } finally {
