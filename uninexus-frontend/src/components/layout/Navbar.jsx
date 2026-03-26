@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import UserAvatar from '../ui/UserAvatar';
 
 const navLinks = [
     { path: '/dashboard', label: 'Home', icon: Home },
@@ -106,9 +107,7 @@ const Navbar = () => {
                     hover:bg-surface-alt dark:hover:bg-surface-dark-alt
                     transition-colors cursor-pointer"
                                 >
-                                    <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                                        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                                    </div>
+                                    <UserAvatar user={user} size="xs" />
                                     <ChevronDown
                                         size={16}
                                         className={`text-text-secondary transition-transform ${profileOpen ? 'rotate-180' : ''

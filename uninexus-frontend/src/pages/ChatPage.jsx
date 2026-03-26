@@ -10,6 +10,7 @@ import { chatGroupAPI, chatAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const ChatPage = () => {
     const { user } = useAuth();
@@ -213,10 +214,13 @@ const ChatPage = () => {
                                         }`}
                                 >
                                     <div className="relative">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${chat.isDirectMessage ? 'gradient-bg' : 'bg-primary'
-                                            }`}>
-                                            {chat.isDirectMessage ? name.charAt(0) : <Hash size={16} />}
-                                        </div>
+                                        {chat.isDirectMessage ? (
+                                            <UserAvatar user={chat.members?.find((m) => (typeof m === 'string' ? m : m._id) !== user?._id) || { name: name }} size="sm" />
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
+                                                <Hash size={16} />
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className={`text-sm truncate ${isSelected ? 'font-bold text-accent-purple' : 'font-medium text-text-primary dark:text-text-dark'
@@ -258,9 +262,13 @@ const ChatPage = () => {
                             >
                                 <ArrowLeft size={18} />
                             </button>
-                            <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
-                                {getChatName(selectedChat).charAt(0)}
-                            </div>
+                            {selectedChat.isDirectMessage ? (
+                                <UserAvatar user={selectedChat.members?.find((m) => (typeof m === 'string' ? m : m._id) !== user?._id) || { name: getChatName(selectedChat) }} size="sm" />
+                            ) : (
+                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
+                                    <Hash size={16} />
+                                </div>
+                            )}
                             <div className="flex-1">
                                 <p className="font-semibold text-sm text-text-primary dark:text-text-dark">
                                     {getChatName(selectedChat)}

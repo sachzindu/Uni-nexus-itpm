@@ -17,6 +17,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const DashboardPage = () => {
     const { user } = useAuth();
@@ -158,9 +159,7 @@ const DashboardPage = () => {
                             {recommendations.map((rec) => (
                                 <Card key={rec._id} className="flex flex-col">
                                     <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
-                                            {rec.name?.charAt(0)?.toUpperCase()}
-                                        </div>
+                                        <UserAvatar user={rec} size="sm" />
                                         <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-sm text-text-primary dark:text-text-dark truncate">
                                                 {rec.name}

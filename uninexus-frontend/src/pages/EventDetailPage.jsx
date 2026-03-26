@@ -14,6 +14,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import StarRating from '../components/ui/StarRating';
 import Loader from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const EventDetailPage = () => {
     const { id } = useParams();
@@ -236,9 +237,7 @@ const EventDetailPage = () => {
                                     className="flex items-center gap-2 px-3 py-1.5 rounded-full
                     bg-surface-alt dark:bg-surface-dark text-sm"
                                 >
-                                    <div className="w-6 h-6 rounded-full gradient-bg flex items-center justify-center text-white text-[10px] font-bold">
-                                        {a.name?.charAt(0)?.toUpperCase() || '?'}
-                                    </div>
+                                    <UserAvatar user={a} size="xs" className="!w-6 !h-6 !text-[10px]" />
                                     <span className="text-text-primary dark:text-text-dark text-xs font-medium">
                                         {a.name}
                                     </span>

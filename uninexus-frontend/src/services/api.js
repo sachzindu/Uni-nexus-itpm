@@ -58,6 +58,13 @@ export const userAPI = {
         api.get('/users/recommendations', { params: { limit } }),
     getAdminStats: () => api.get('/users/admin/stats'),
     getUserById: (id) => api.get(`/users/${id}`),
+    uploadProfilePhoto: (file) => {
+        const formData = new FormData();
+        formData.append('profilePhoto', file);
+        return api.post('/users/profile/photo', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
 };
 
 // ─── Interest API ────────────────────────────────────────────

@@ -13,6 +13,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Loader from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const GroupDetailPage = () => {
     const { id } = useParams();
@@ -239,9 +240,7 @@ const GroupDetailPage = () => {
                     {isMember && (
                         <div className="flex justify-between items-center bg-white dark:bg-surface-dark-alt rounded-3xl p-4 card-shadow">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                                    {(user?.name || 'U').charAt(0)}
-                                </div>
+                                <UserAvatar user={user} size="sm" />
                                 <span className="text-text-secondary dark:text-text-dark-secondary">
                                     Share something with the group...
                                 </span>
@@ -265,9 +264,7 @@ const GroupDetailPage = () => {
                             return (
                                 <Card key={post._id} hover={false}>
                                     <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
-                                            {(post.author?.name || 'U').charAt(0)}
-                                        </div>
+                                        <UserAvatar user={post.author} size="xs" />
                                         <div>
                                             <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
                                                 {post.author?.name || 'Unknown'}
@@ -348,9 +345,7 @@ const GroupDetailPage = () => {
                         );
                         return (
                             <Card key={m._id} hover={false} className="flex items-center gap-3 !p-4">
-                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
-                                    {m.name?.charAt(0)?.toUpperCase() || '?'}
-                                </div>
+                                <UserAvatar user={m} size="sm" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-text-primary dark:text-text-dark truncate">
                                         {m.name}

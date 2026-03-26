@@ -11,6 +11,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const StudentProfilePage = () => {
     const { id } = useParams();
@@ -145,11 +146,7 @@ const StudentProfilePage = () => {
 
                 {/* Profile header */}
                 <Card hover={false} className="text-center mb-6">
-                    <div className="w-24 h-24 mx-auto mb-4 rounded-full gradient-bg
-                        flex items-center justify-center text-white text-3xl font-bold
-                        animate-pulse-glow">
-                        {student.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
+                    <UserAvatar user={student} size="xl" className="mx-auto mb-4 animate-pulse-glow" />
                     <h1 className="text-2xl font-extrabold text-text-primary dark:text-text-dark">
                         {student.name}
                     </h1>

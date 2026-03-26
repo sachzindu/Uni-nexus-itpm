@@ -11,6 +11,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const departments = [
     'Computer Science', 'Engineering', 'Business', 'Arts & Design',
@@ -186,10 +187,7 @@ const ProfilePage = () => {
                                                     className="px-4 py-3 hover:bg-surface-alt dark:hover:bg-surface-dark transition-colors"
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-full gradient-bg flex items-center
-                                                            justify-center text-white text-sm font-bold shrink-0">
-                                                            {notif.from?.name?.charAt(0)?.toUpperCase() || 'U'}
-                                                        </div>
+                                                        <UserAvatar user={notif.from} size="sm" />
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-sm font-semibold text-text-primary dark:text-text-dark truncate">
                                                                 {notif.from?.name}
@@ -237,11 +235,7 @@ const ProfilePage = () => {
 
                 {/* Profile header */}
                 <Card hover={false} className="text-center mb-6">
-                    <div className="w-24 h-24 mx-auto mb-4 rounded-full gradient-bg
-            flex items-center justify-center text-white text-3xl font-bold
-            animate-pulse-glow">
-                        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
+                    <UserAvatar user={user} size="xl" className="mx-auto mb-4 animate-pulse-glow" />
                     <h1 className="text-2xl font-extrabold text-text-primary dark:text-text-dark">
                         {user?.name}
                     </h1>

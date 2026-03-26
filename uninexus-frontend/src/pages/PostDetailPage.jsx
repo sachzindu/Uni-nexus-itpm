@@ -11,6 +11,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Loader from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const PostDetailPage = () => {
     const { id: groupId, postId } = useParams();
@@ -183,9 +184,7 @@ const PostDetailPage = () => {
                 <Card hover={false} className="mb-6">
                     {/* Author Info */}
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                            {(post.author?.name || 'U').charAt(0)}
-                        </div>
+                        <UserAvatar user={post.author} size="sm" />
                         <div className="flex-1">
                             <p className="font-semibold text-text-primary dark:text-text-dark">
                                 {post.author?.name || 'Unknown'}
@@ -285,9 +284,7 @@ const PostDetailPage = () => {
                 >
                     <div className="bg-white dark:bg-surface-dark-alt rounded-2xl card-shadow p-4">
                         <div className="flex gap-3">
-                            <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
-                                {(user?.name || 'U').charAt(0)}
-                            </div>
+                            <UserAvatar user={user} size="xs" className="flex-shrink-0" />
                             <div className="flex-1">
                                 <textarea
                                     ref={commentInputRef}
@@ -358,9 +355,7 @@ const PostDetailPage = () => {
                                 <div className="bg-white dark:bg-surface-dark-alt rounded-xl border border-border dark:border-border-dark p-4">
                                     <div className="flex gap-3">
                                         {/* User avatar */}
-                                        <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
-                                            {(comment.user?.name || 'U').charAt(0)}
-                                        </div>
+                                        <UserAvatar user={comment.user} size="xs" className="flex-shrink-0" />
                                         <div className="flex-1 min-w-0">
                                             {/* Name and time */}
                                             <div className="flex items-center gap-2 mb-1.5">

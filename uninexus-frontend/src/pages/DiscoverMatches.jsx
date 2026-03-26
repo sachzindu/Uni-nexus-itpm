@@ -7,6 +7,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const departments = [
     'All', 'Computer Science', 'Engineering', 'Business', 'Arts & Design',
@@ -204,9 +205,7 @@ const DiscoverMatches = () => {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {users.map((student) => (
                         <Card key={student._id} className="text-center">
-                            <div className="w-16 h-16 mx-auto mb-3 rounded-full gradient-bg flex items-center justify-center text-white text-xl font-bold">
-                                {student.name?.charAt(0)?.toUpperCase()}
-                            </div>
+                            <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
                             <h3 className="font-semibold text-text-primary dark:text-text-dark">
                                 {student.name}
                             </h3>
