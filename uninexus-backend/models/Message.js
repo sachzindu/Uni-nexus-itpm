@@ -39,18 +39,19 @@ const messageSchema = new mongoose.Schema(
     }
 );
 
-// Custom validator: exactly one of group or chatGroup must be set
-messageSchema.pre('validate', function (next) {
+// Custom validator: exactly one of group or chatGroup must be set.
+// Mongoose v9 may not provide the `next` callback reliably for this hook,
+// so we throw to reject validation instead of calling `next(...)`.
+messageSchema.pre('validate', function () {
     const hasGroup = this.group != null;
     const hasChatGroup = this.chatGroup != null;
 
     if (!hasGroup && !hasChatGroup) {
-        return next(new Error('A message must belong to either a group or a chat group.'));
+        throw new Error('A message must belong to either a group or a chat group.');
     }
     if (hasGroup && hasChatGroup) {
-        return next(new Error('A message cannot belong to both a group and a chat group.'));
+        throw new Error('A message cannot belong to both a group and a chat group.');
     }
-    next();
 });
 
 // Index for efficient message retrieval by group or chatGroup
