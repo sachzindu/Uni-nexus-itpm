@@ -36,4 +36,7 @@ router.put('/:id/join-requests/:requestId', validate(handleJoinRequestSchema), h
 router.post('/:id/leave', leaveGroup);
 router.get('/:id/members', getMembers);
 
+// Remove a member (admin only)
+router.delete('/:groupId/members/:memberId', require('../middleware/authMiddleware').protect, require('../controllers/groupController').removeMember);
+
 module.exports = router;

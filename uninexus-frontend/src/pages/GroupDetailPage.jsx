@@ -13,6 +13,7 @@ import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Loader from '../components/ui/Loader';
+import Input from '../components/ui/Input';
 
 const GroupDetailPage = () => {
     const { id } = useParams();
@@ -26,8 +27,59 @@ const GroupDetailPage = () => {
     const [newPost, setNewPost] = useState('');
     const [posting, setPosting] = useState(false);
     const [tab, setTab] = useState('feed');
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editLoading, setEditLoading] = useState(false);
+    const [editForm, setEditForm] = useState({ name: '', description: '', tags: '' });
+        // Open edit modal and populate form
+        const openEditModal = () => {
+            setEditForm({
+                name: group?.name || '',
+                description: group?.description || '',
+                tags: (group?.tags || []).join(', '),
+            });
+            setShowEditModal(true);
+        };
 
-    const isAdmin = group?.admins?.some(
+        const handleEditChange = (e) => {
+            setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+        };
+
+        const handleEditSubmit = async (e) => {
+            e.preventDefault();
+            setEditLoading(true);
+            try {
+                const payload = {
+                    name: editForm.name,
+                    description: editForm.description,
+                    tags: editForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
+                };
+                const res = await groupAPI.update(id, payload);
+                setGroup(res.data?.group || res.data);
+                toast.success('Group updated');
+                setShowEditModal(false);
+            } catch (err) {
+                toast.error(err.message || 'Failed to update group');
+            } finally {
+                setEditLoading(false);
+            }
+        };
+    // Delete group handler (admin only)
+    const handleDeleteGroup = async () => {
+        if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+        setDeleteLoading(true);
+        try {
+            await groupAPI.delete(id);
+            toast.success('Group deleted');
+            navigate('/groups');
+        } catch (err) {
+            toast.error(err.message || 'Failed to delete group');
+        } finally {
+            setDeleteLoading(false);
+        }
+    };
+
+    const isAdmin = (group?.admins || []).some(
         (a) => (typeof a === 'string' ? a : a._id) === user?._id
     );
     const isMember = group?.members?.some(
@@ -158,7 +210,7 @@ const GroupDetailPage = () => {
                                 {group.description || 'No description'}
                             </p>
                             <div className="flex flex-wrap gap-1 mt-2">
-                                {group.tags?.map((tag) => (
+                                {(group.tags || []).map((tag) => (
                                     <Badge key={tag} variant="purple" className="text-[10px]">
                                         {tag}
                                     </Badge>
@@ -177,6 +229,24 @@ const GroupDetailPage = () => {
                                     <LogOut size={14} />
                                     Leave
                                 </Button>
+                                {isAdmin && (
+                                    <>
+                                        <Button variant="secondary" size="sm" onClick={openEditModal}>
+                                            <Settings size={14} />
+                                            Edit Group
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={handleDeleteGroup}
+                                            loading={deleteLoading}
+                                            className="border border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-900"
+                                        >
+                                            <Trash2 size={14} />
+                                            Delete Group
+                                        </Button>
+                                    </>
+                                )}
                             </>
                         ) : (
                             <Button variant="gradient" onClick={handleJoin}>
@@ -185,6 +255,36 @@ const GroupDetailPage = () => {
                             </Button>
                         )}
                     </div>
+                            {/* Edit Group Modal */}
+                            <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
+                                <form onSubmit={handleEditSubmit} className="space-y-4">
+                                    <Input
+                                        label="Group Name"
+                                        name="name"
+                                        value={editForm.name}
+                                        onChange={handleEditChange}
+                                        required
+                                    />
+                                    <Input
+                                        label="Description"
+                                        name="description"
+                                        value={editForm.description}
+                                        onChange={handleEditChange}
+                                        as="textarea"
+                                        rows={3}
+                                    />
+                                    <Input
+                                        label="Tags (comma separated)"
+                                        name="tags"
+                                        value={editForm.tags}
+                                        onChange={handleEditChange}
+                                    />
+                                    <div className="flex justify-end gap-2">
+                                        <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                                        <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
+                                    </div>
+                                </form>
+                            </Modal>
                 </div>
 
                 {/* Stats */}
@@ -262,13 +362,15 @@ const GroupDetailPage = () => {
                                 - (post.downvoteCount || post.downvotes?.length || 0);
                             const commentCount = post.commentCount ?? post.comments?.length ?? 0;
 
+                            // Only show delete if user is author or group admin
+                            const canDelete = (post.author?._id === user?._id) || isAdmin;
                             return (
                                 <Card key={post._id} hover={false}>
                                     <div className="flex items-center gap-3 mb-3">
                                         <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
                                             {(post.author?.name || 'U').charAt(0)}
                                         </div>
-                                        <div>
+                                        <div className="flex-1">
                                             <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
                                                 {post.author?.name || 'Unknown'}
                                             </p>
@@ -276,6 +378,26 @@ const GroupDetailPage = () => {
                                                 {new Date(post.createdAt).toLocaleDateString()}
                                             </p>
                                         </div>
+                                        {canDelete && (
+                                            <Button
+                                                variant="danger"
+                                                size="icon-sm"
+                                                title="Delete post"
+                                                onClick={async () => {
+                                                    if (window.confirm('Are you sure you want to delete this post?')) {
+                                                        try {
+                                                            await postAPI.delete(id, post._id);
+                                                            setPosts((prev) => prev.filter((p) => p._id !== post._id));
+                                                            toast.success('Post deleted');
+                                                        } catch (err) {
+                                                            toast.error('Failed to delete post');
+                                                        }
+                                                    }
+                                                }}
+                                            >
+                                                <Trash2 size={16} />
+                                            </Button>
+                                        )}
                                     </div>
                                     <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap mb-3">
                                         {post.content}
@@ -343,9 +465,11 @@ const GroupDetailPage = () => {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {group.members?.map((member) => {
                         const m = typeof member === 'string' ? { _id: member, name: 'User' } : member;
-                        const memberIsAdmin = group.admins?.some(
+                        const memberIsAdmin = (group.admins || []).some(
                             (a) => (typeof a === 'string' ? a : a._id) === m._id
                         );
+                        // Only show Remove button if current user is admin, member is not admin, and not self
+                        const canRemove = isAdmin && !memberIsAdmin && m._id !== user?._id;
                         return (
                             <Card key={m._id} hover={false} className="flex items-center gap-3 !p-4">
                                 <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
@@ -362,6 +486,26 @@ const GroupDetailPage = () => {
                                     )}
                                 </div>
                                 {memberIsAdmin && <Badge variant="purple" className="text-[10px]">Admin</Badge>}
+                                {canRemove && (
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={async () => {
+                                            if (!window.confirm(`Remove ${m.name || 'this user'} from the group?`)) return;
+                                            try {
+                                                await groupAPI.removeMember(id, m._id);
+                                                // Refresh group data
+                                                const grpRes = await groupAPI.getById(id);
+                                                setGroup(grpRes.data?.group || grpRes.data);
+                                                toast.success('Member removed');
+                                            } catch (err) {
+                                                toast.error(err.message || 'Failed to remove member');
+                                            }
+                                        }}
+                                    >
+                                        Remove
+                                    </Button>
+                                )}
                             </Card>
                         );
                     })}
