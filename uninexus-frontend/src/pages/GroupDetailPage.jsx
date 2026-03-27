@@ -45,25 +45,54 @@ const GroupDetailPage = () => {
             setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
         };
 
-        const handleEditSubmit = async (e) => {
-            e.preventDefault();
-            setEditLoading(true);
-            try {
-                const payload = {
-                    name: editForm.name,
-                    description: editForm.description,
-                    tags: editForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
-                };
-                const res = await groupAPI.update(id, payload);
-                setGroup(res.data?.group || res.data);
-                toast.success('Group updated');
-                setShowEditModal(false);
-            } catch (err) {
-                toast.error(err.message || 'Failed to update group');
-            } finally {
-                setEditLoading(false);
-            }
+const handleEditSubmit = async (e) => {
+    e.preventDefault();
+
+    const name = editForm.name.trim();
+    const description = editForm.description.trim();
+    const tagsArray = editForm.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+    // Validation
+    if (!name) {
+        return toast.error('Group name is required');
+    }
+    if (name.length < 3) {
+        return toast.error('Group name must be at least 3 characters');
+    }
+    if (!description) {
+        return toast.error('Description is required');
+    }
+    if (description.length < 10) {
+        return toast.error('Description must be at least 10 characters');
+    }
+    if (tagsArray.length === 0) {
+        return toast.error('At least one tag is required');
+    }
+
+    setEditLoading(true);
+
+    try {
+        const payload = {
+            name,
+            description,
+            tags: tagsArray,
         };
+
+        const res = await groupAPI.update(id, payload);
+        setGroup(res.data?.group || res.data);
+
+        toast.success('Group updated successfully');
+        setShowEditModal(false);
+
+    } catch (err) {
+        toast.error(err.message || 'Failed to update group');
+    } finally {
+        setEditLoading(false);
+    }
+};
     // Delete group handler (admin only)
     const handleDeleteGroup = async () => {
         if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
