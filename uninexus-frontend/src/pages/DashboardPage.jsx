@@ -105,21 +105,36 @@ const DashboardPage = () => {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
-                    { label: 'My Groups', value: user?.groups?.length || 0, icon: LayoutGrid, color: 'text-accent-purple' },
-                    { label: 'My Events', value: user?.events?.length || 0, icon: Calendar, color: 'text-accent-orange' },
-                    { label: 'Interests', value: user?.interests?.length || 0, icon: Sparkles, color: 'text-success' },
-                    { label: 'Matches', value: recommendations.length, icon: TrendingUp, color: 'text-blue-500' },
-                ].map(({ label, value, icon: Icon, color }) => (
-                    <Card key={label} hover={false} className="text-center">
-                        <Icon size={24} className={`mx-auto mb-2 ${color}`} />
-                        <p className="text-2xl font-bold text-text-primary dark:text-text-dark">
-                            {value}
-                        </p>
-                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                            {label}
-                        </p>
-                    </Card>
-                ))}
+                    { label: 'My Groups', value: user?.groups?.length || 0, icon: LayoutGrid, color: 'text-accent-purple', to: '/dashboard/my-groups' },
+                    { label: 'My Events', value: user?.events?.length || 0, icon: Calendar, color: 'text-accent-orange', to: '/dashboard/my-events' },
+                    { label: 'Interests', value: user?.interests?.length || 0, icon: Sparkles, color: 'text-success', to: null },
+                    { label: 'Matches', value: recommendations.length, icon: TrendingUp, color: 'text-blue-500', to: null },
+                ].map(({ label, value, icon: Icon, color, to }) => {
+                    const cardContent = (
+                        <Card key={label} hover={!!to} className={`text-center ${to ? 'cursor-pointer' : ''}`}>
+                            <Icon size={24} className={`mx-auto mb-2 ${color}`} />
+                            <p className="text-2xl font-bold text-text-primary dark:text-text-dark">
+                                {value}
+                            </p>
+                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                {label}
+                            </p>
+                            {to && (
+                                <p className="text-[10px] text-accent-purple mt-1 font-medium">
+                                    View all →
+                                </p>
+                            )}
+                        </Card>
+                    );
+
+                    return to ? (
+                        <Link key={label} to={to}>
+                            {cardContent}
+                        </Link>
+                    ) : (
+                        <div key={label}>{cardContent}</div>
+                    );
+                })}
             </div>
 
             <div className="grid lg:grid-cols-3 gap-8">

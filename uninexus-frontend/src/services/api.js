@@ -65,6 +65,17 @@ export const userAPI = {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
     },
+    uploadGalleryPhotos: (files) => {
+        const formData = new FormData();
+        files.forEach((file) => formData.append('galleryPhotos', file));
+        return api.post('/users/profile/gallery', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
+    deleteGalleryPhoto: (photoUrl) =>
+        api.delete('/users/profile/gallery', { data: { photoUrl } }),
+    getMyGroups: () => api.get('/users/my-groups'),
+    getMyEvents: () => api.get('/users/my-events'),
 };
 
 // ─── Interest API ────────────────────────────────────────────

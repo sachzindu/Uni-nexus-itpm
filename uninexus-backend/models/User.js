@@ -69,6 +69,14 @@ const userSchema = new mongoose.Schema(
             type: String,
             default: '',
         },
+        galleryPhotos: {
+            type: [String],
+            default: [],
+            validate: {
+                validator: (v) => v.length <= 5,
+                message: 'Maximum 5 gallery photos allowed.',
+            },
+        },
         groups: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Group',

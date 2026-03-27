@@ -114,4 +114,83 @@ const uploadProfilePhoto = async (req, res, next) => {
     }
 };
 
-module.exports = { getProfile, updateProfile, getAllUsers, getRecommendations, getAdminStats, getUserById, uploadProfilePhoto };
+/**
+ * @desc    Upload gallery photos (up to 5 total)
+ * @route   POST /api/users/profile/gallery
+ * @access  Private
+ */
+const uploadGalleryPhotos = async (req, res, next) => {
+    try {
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No image files provided.',
+            });
+        }
+
+        const user = await userService.uploadGalleryPhotos(req.user._id, req.files);
+        res.status(200).json({
+            success: true,
+            message: 'Gallery photos uploaded successfully',
+            data: { user },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Delete a single gallery photo
+ * @route   DELETE /api/users/profile/gallery
+ * @access  Private
+ */
+const deleteGalleryPhoto = async (req, res, next) => {
+    try {
+        const { photoUrl } = req.body;
+        if (!photoUrl) {
+            return res.status(400).json({
+                success: false,
+                message: 'photoUrl is required.',
+            });
+        }
+
+        const user = await userService.deleteGalleryPhoto(req.user._id, photoUrl);
+        res.status(200).json({
+            success: true,
+            message: 'Photo deleted successfully',
+            data: { user },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get groups the current user is a member of
+ * @route   GET /api/users/my-groups
+ * @access  Private
+ */
+const getMyGroups = async (req, res, next) => {
+    try {
+        const groups = await userService.getMyGroups(req.user._id);
+        res.status(200).json({ success: true, data: { groups } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * @desc    Get events the current user is registered for
+ * @route   GET /api/users/my-events
+ * @access  Private
+ */
+const getMyEvents = async (req, res, next) => {
+    try {
+        const events = await userService.getMyEvents(req.user._id);
+        res.status(200).json({ success: true, data: { events } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+module.exports = { getProfile, updateProfile, getAllUsers, getRecommendations, getAdminStats, getUserById, uploadProfilePhoto, uploadGalleryPhotos, deleteGalleryPhoto, getMyGroups, getMyEvents };

@@ -46,4 +46,34 @@ const upload = multer({
  */
 const uploadProfilePhoto = upload.single('profilePhoto');
 
-module.exports = { uploadProfilePhoto };
+// ─── Gallery Photos Upload ───────────────────────────────────
+const galleryStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const userId = req.user?._id || 'unknown';
+        const galleryDir = path.join(__dirname, '..', 'uploads', 'gallery', userId.toString());
+        if (!fs.existsSync(galleryDir)) {
+            fs.mkdirSync(galleryDir, { recursive: true });
+        }
+        cb(null, galleryDir);
+    },
+    filename: (req, file, cb) => {
+        const timestamp = Date.now();
+        const random = crypto.randomBytes(6).toString('hex');
+        const ext = path.extname(file.originalname).toLowerCase();
+        cb(null, `${timestamp}-${random}${ext}`);
+    },
+});
+
+const galleryUpload = multer({
+    storage: galleryStorage,
+    fileFilter,
+    limits: { fileSize: MAX_SIZE },
+});
+
+/**
+ * Middleware for uploading up to 5 gallery photos.
+ * Field name: 'galleryPhotos'
+ */
+const uploadGalleryPhotos = galleryUpload.array('galleryPhotos', 5);
+
+module.exports = { uploadProfilePhoto, uploadGalleryPhotos };

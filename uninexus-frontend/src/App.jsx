@@ -25,6 +25,8 @@ import ProfilePage from './pages/ProfilePage';
 import StudentProfilePage from './pages/StudentProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import DiscoverMatches from './pages/DiscoverMatches';
+import MyGroupsPage from './pages/MyGroupsPage';
+import MyEventsPage from './pages/MyEventsPage';
 
 // Admin Pages
 import AdminLoginPage from './pages/AdminLoginPage';
@@ -65,6 +67,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <DiscoverMatches />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/my-groups"
+                    element={
+                      <ProtectedRoute>
+                        <MyGroupsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/dashboard/my-events"
+                    element={
+                      <ProtectedRoute>
+                        <MyEventsPage />
                       </ProtectedRoute>
                     }
                   />
