@@ -702,6 +702,7 @@ const EventsPage = () => {
                             <div className="flex flex-wrap gap-2 mb-3">
                                 <Button
                                     variant="outline"
+                                    className="bg-accent-purple text-white hover:bg-accent-purple/90"
                                     onClick={() => {
                                         // Download CSV of registered students
                                         const csvRows = [
