@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Users, Shield, Plus, ThumbsUp, ThumbsDown, MessageCircle,
-    Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image,
+    Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image, Hash,
 } from 'lucide-react';
 import { groupAPI, postAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Loader from '../components/ui/Loader';
 import UserAvatar from '../components/ui/UserAvatar';
+import GroupChatTab from '../components/group/GroupChatTab';
 
 const GroupDetailPage = () => {
     const { id } = useParams();
@@ -215,6 +216,7 @@ const GroupDetailPage = () => {
             <div className="flex gap-1 mb-6 bg-surface-alt dark:bg-surface-dark rounded-xl p-1 overflow-x-auto">
                 {[
                     { key: 'feed', label: 'Feed', icon: MessageCircle },
+                    ...(isMember ? [{ key: 'chat', label: 'Chat', icon: Hash }] : []),
                     { key: 'members', label: 'Members', icon: Users },
                     ...(isAdmin ? [{ key: 'requests', label: `Requests (${pendingRequests.length})`, icon: UserPlus }] : []),
                 ].map(({ key, label, icon: Icon }) => (
@@ -333,6 +335,11 @@ const GroupDetailPage = () => {
                         </Card>
                     )}
                 </div>
+            )}
+
+            {/* Chat Tab */}
+            {tab === 'chat' && isMember && (
+                <GroupChatTab groupId={id} />
             )}
 
             {/* Members Tab */}

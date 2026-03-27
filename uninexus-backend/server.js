@@ -64,7 +64,7 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const path = require('path');
+
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 if (process.env.NODE_ENV !== 'test') {
