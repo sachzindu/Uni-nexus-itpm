@@ -18,7 +18,14 @@ export const SocketProvider = ({ children }) => {
     const { user, isAuthenticated } = useAuth();
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [connected, setConnected] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [activeChatGroupId, setActiveChatGroupId] = useState(null);
     const socketRef = useRef(null);
+    const activeChatGroupRef = useRef(null);
+
+    useEffect(() => {
+        activeChatGroupRef.current = activeChatGroupId;
+    }, [activeChatGroupId]);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -27,6 +34,8 @@ export const SocketProvider = ({ children }) => {
                 socketRef.current = null;
                 setConnected(false);
             }
+            setNotifications([]);
+            setActiveChatGroupId(null);
             return;
         }
 
@@ -62,17 +71,48 @@ export const SocketProvider = ({ children }) => {
             setOnlineUsers((prev) => prev.filter((id) => id !== userId));
         });
 
+        socket.on('newChatGroupMessage', (message) => {
+            const senderId =
+                typeof message?.sender === 'string'
+                    ? message.sender
+                    : message?.sender?._id;
+
+            // Do not notify for own messages.
+            if (!senderId || senderId === user?._id) return;
+
+            // Do not create bell notification while user is inside that exact chat.
+            if (activeChatGroupRef.current && message?.chatGroup === activeChatGroupRef.current) return;
+
+            const senderName =
+                typeof message?.sender === 'string'
+                    ? 'Friend'
+                    : message?.sender?.name || 'Friend';
+
+            setNotifications((prev) => [
+                {
+                    id: message?._id || `${Date.now()}-${Math.random()}`,
+                    chatGroupId: message?.chatGroup,
+                    senderName,
+                    content: message?.content || 'Sent you a new message',
+                    createdAt: message?.createdAt || new Date().toISOString(),
+                    read: false,
+                },
+                ...prev,
+            ]);
+        });
+
         // Heartbeat response
         socket.on('ping', () => {
             socket.emit('pong');
         });
 
         return () => {
+            socket.off('newChatGroupMessage');
             socket.disconnect();
             socketRef.current = null;
             setConnected(false);
         };
-    }, [isAuthenticated]);
+    }, [isAuthenticated, user?._id]);
 
     const joinRoom = useCallback((groupId) => {
         socketRef.current?.emit('joinRoom', groupId);
@@ -106,6 +146,14 @@ export const SocketProvider = ({ children }) => {
         socketRef.current?.emit('stopTyping', { groupId });
     }, []);
 
+    const markAllNotificationsRead = useCallback(() => {
+        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    }, []);
+
+    const removeNotification = useCallback((notificationId) => {
+        setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+    }, []);
+
     const value = {
         socket: socketRef.current,
         connected,
@@ -118,6 +166,12 @@ export const SocketProvider = ({ children }) => {
         sendChatGroupMessage,
         emitTyping,
         emitStopTyping,
+        notifications,
+        unreadNotificationCount: notifications.filter((n) => !n.read).length,
+        markAllNotificationsRead,
+        removeNotification,
+        activeChatGroupId,
+        setActiveChatGroupId,
     };
 
     return (

@@ -14,7 +14,14 @@ import { useToast } from '../components/ui/Toast';
 
 const ChatPage = () => {
     const { user } = useAuth();
-    const { socket, onlineUsers, joinChatGroup, leaveChatGroup, sendChatGroupMessage } = useSocket();
+    const {
+        socket,
+        onlineUsers,
+        joinChatGroup,
+        leaveChatGroup,
+        sendChatGroupMessage,
+        setActiveChatGroupId,
+    } = useSocket();
     const toast = useToast();
 
     const [chatGroups, setChatGroups] = useState([]);
@@ -113,6 +120,7 @@ const ChatPage = () => {
         }
 
         setSelectedChat(chat);
+        setActiveChatGroupId(chat._id);
         setShowSidebar(false);
         setMsgLoading(true);
         setMessages([]);
@@ -131,6 +139,12 @@ const ChatPage = () => {
         // Join new room
         joinChatGroup(chat._id);
     };
+
+    useEffect(() => {
+        return () => {
+            setActiveChatGroupId(null);
+        };
+    }, [setActiveChatGroupId]);
 
     const handleSend = (e) => {
         e.preventDefault();
