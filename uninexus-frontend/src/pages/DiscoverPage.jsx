@@ -7,10 +7,11 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const departments = [
-    'All', 'Computer Science', 'Engineering', 'Business', 'Arts & Design',
-    'Medicine', 'Law', 'Sciences', 'Education', 'Social Sciences', 'Architecture',
+    'All', 'Computing', 'Engineering', 'Business', 'Humanities and sciences',
+    'Medicine', 'Education', 'Architecture',
 ];
 
 const DiscoverPage = () => {
@@ -187,10 +188,8 @@ const DiscoverPage = () => {
             ) : users.length > 0 ? (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {users.map((student) => (
-                        <Card key={student._id} className="text-center">
-                            <div className="w-16 h-16 mx-auto mb-3 rounded-full gradient-bg flex items-center justify-center text-white text-xl font-bold">
-                                {student.name?.charAt(0)?.toUpperCase()}
-                            </div>
+                        <Card key={student._id} className="text-center flex flex-col">
+                            <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
                             <h3 className="font-semibold text-text-primary dark:text-text-dark">
                                 {student.name}
                             </h3>
@@ -202,7 +201,7 @@ const DiscoverPage = () => {
                                     {student.bio}
                                 </p>
                             )}
-                            <div className="flex flex-wrap justify-center gap-1 mt-3">
+                            <div className="flex flex-wrap justify-center gap-1 mt-3 mb-2">
                                 {student.interests?.slice(0, 3).map((int) => (
                                     <Badge key={int} variant="default" className="text-[10px]">
                                         {int}
@@ -217,7 +216,7 @@ const DiscoverPage = () => {
                             <Button
                                 variant="gradient"
                                 size="sm"
-                                className="mt-4 w-full"
+                                className="mt-auto pt-4 w-full"
                                 onClick={() => navigate(`/students/${student._id}`)}
                             >
                                 <Eye size={14} />

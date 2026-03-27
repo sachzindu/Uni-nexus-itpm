@@ -32,6 +32,17 @@ const userSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        faculty: {
+            type: String,
+            trim: true,
+        },
+        studentIdNumber: {
+            type: String,
+            trim: true,
+            match: [/^[A-Za-z0-9]{10}$/, 'Student ID Number must be exactly 10 letters and numbers'],
+            unique: true,
+            sparse: true,
+        },
         year: {
             type: Number,
             min: 1,
@@ -64,6 +75,18 @@ const userSchema = new mongoose.Schema(
         avatar: {
             type: String,
             default: '',
+        },
+        profilePhotoUrl: {
+            type: String,
+            default: '',
+        },
+        galleryPhotos: {
+            type: [String],
+            default: [],
+            validate: {
+                validator: (v) => v.length <= 5,
+                message: 'Maximum 5 gallery photos allowed.',
+            },
         },
         groups: [{
             type: mongoose.Schema.Types.ObjectId,

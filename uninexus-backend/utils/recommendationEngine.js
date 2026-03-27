@@ -64,7 +64,7 @@ const getRecommendedUsers = async (userId, limit = 10) => {
     const otherUsers = await User.find({
         _id: { $ne: userId, $nin: friendIds },
         interests: { $exists: true, $not: { $size: 0 } },
-    }).select('name email department year bio interests avatar');
+    }).select('name email department year bio interests profilePhotoUrl');
 
     // Calculate similarity scores
     const scoredUsers = otherUsers

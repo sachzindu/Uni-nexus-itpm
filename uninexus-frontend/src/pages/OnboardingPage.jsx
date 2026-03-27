@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,10 +12,11 @@ import {
     Users,
     Coffee,
     Lightbulb,
+    Camera,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
-import { interestAPI } from '../services/api';
+import { interestAPI, userAPI } from '../services/api';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
@@ -42,13 +43,19 @@ const socialGoals = [
     { id: 'network', label: 'Professional Network', icon: Users, desc: 'Build career connections' },
 ];
 
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
 const OnboardingPage = () => {
-    const { updateProfile } = useAuth();
+    const { updateProfile, fetchMe } = useAuth();
     const toast = useToast();
     const navigate = useNavigate();
     const [currentStep, setCurrentStep] = useState(0);
     const [loading, setLoading] = useState(false);
     const [categories, setCategories] = useState([]);
+    const [profilePhoto, setProfilePhoto] = useState(null);
+    const [photoPreview, setPhotoPreview] = useState(null);
+    const fileInputRef = useRef(null);
 
     const [form, setForm] = useState({
         department: '',
@@ -57,6 +64,33 @@ const OnboardingPage = () => {
         selectedInterests: [],
         goals: [],
     });
+
+    // Clean up object URL on unmount or when preview changes
+    useEffect(() => {
+        return () => {
+            if (photoPreview) URL.revokeObjectURL(photoPreview);
+        };
+    }, [photoPreview]);
+
+    const handlePhotoSelect = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!ALLOWED_TYPES.includes(file.type)) {
+            toast.error('Only JPEG, PNG, and WebP images are allowed.');
+            return;
+        }
+        if (file.size > MAX_FILE_SIZE) {
+            toast.error('Image must be smaller than 5 MB.');
+            return;
+        }
+
+        // Revoke old preview
+        if (photoPreview) URL.revokeObjectURL(photoPreview);
+
+        setProfilePhoto(file);
+        setPhotoPreview(URL.createObjectURL(file));
+    };
 
     // Fetch interest categories
     useEffect(() => {
@@ -140,12 +174,25 @@ const OnboardingPage = () => {
     const handleFinish = async () => {
         setLoading(true);
         try {
+            // Upload profile photo first (optional)
+            if (profilePhoto) {
+                try {
+                    await userAPI.uploadProfilePhoto(profilePhoto);
+                } catch (photoErr) {
+                    toast.error(photoErr.message || 'Failed to upload photo, but continuing setup.');
+                }
+            }
+
             await updateProfile({
                 department: form.department,
                 year: parseInt(form.year, 10),
                 bio: form.bio,
                 selectedInterests: form.selectedInterests,
             });
+
+            // Refresh user data so profilePhotoUrl is available globally
+            await fetchMe();
+
             toast.success('Profile set up successfully!');
             navigate('/dashboard');
         } catch (err) {
@@ -224,6 +271,48 @@ const OnboardingPage = () => {
                                     <p className="text-text-secondary dark:text-text-dark-secondary mt-1">
                                         Help us match you with the right people.
                                     </p>
+                                </div>
+
+                                {/* Profile Photo Upload */}
+                                <div className="flex justify-center">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={handlePhotoSelect}
+                                        className="hidden"
+                                        id="profile-photo-input"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="relative w-28 h-28 rounded-full border-2 border-dashed
+                                            border-border dark:border-border-dark
+                                            hover:border-accent-purple dark:hover:border-accent-purple
+                                            transition-all cursor-pointer overflow-hidden group"
+                                        id="profile-photo-upload-btn"
+                                    >
+                                        {photoPreview ? (
+                                            <>
+                                                <img
+                                                    src={photoPreview}
+                                                    alt="Profile preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100
+                                                    transition-opacity flex items-center justify-center">
+                                                    <Camera size={24} className="text-white" />
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center
+                                                text-text-secondary dark:text-text-dark-secondary
+                                                group-hover:text-accent-purple transition-colors">
+                                                <Camera size={28} className="mb-1" />
+                                                <span className="text-[10px] font-medium">Add Photo</span>
+                                            </div>
+                                        )}
+                                    </button>
                                 </div>
 
                                 <div>
