@@ -11,6 +11,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const StudentProfilePage = () => {
     const { id } = useParams();
@@ -145,11 +146,7 @@ const StudentProfilePage = () => {
 
                 {/* Profile header */}
                 <Card hover={false} className="text-center mb-6">
-                    <div className="w-24 h-24 mx-auto mb-4 rounded-full gradient-bg
-                        flex items-center justify-center text-white text-3xl font-bold
-                        animate-pulse-glow">
-                        {student.name?.charAt(0)?.toUpperCase() || 'U'}
-                    </div>
+                    <UserAvatar user={student} size="xl" className="mx-auto mb-4 animate-pulse-glow" />
                     <h1 className="text-2xl font-extrabold text-text-primary dark:text-text-dark">
                         {student.name}
                     </h1>
@@ -199,6 +196,32 @@ const StudentProfilePage = () => {
                         </p>
                     )}
                 </Card>
+
+                {/* Photos (read-only, only shown if student has photos) */}
+                {student.galleryPhotos?.length > 0 && (
+                    <Card hover={false} className="mb-6">
+                        <h3 className="text-lg font-bold text-text-primary dark:text-text-dark mb-4">
+                            Photos
+                        </h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {student.galleryPhotos.map((photo) => (
+                                <div
+                                    key={photo}
+                                    className="relative group aspect-square rounded-2xl overflow-hidden
+                                        border border-border dark:border-border-dark card-shadow"
+                                >
+                                    <img
+                                        src={photo}
+                                        alt="Gallery"
+                                        className="w-full h-full object-cover transition-transform duration-300
+                                            group-hover:scale-105"
+                                        loading="lazy"
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                )}
 
                 {/* Activity summary */}
                 <div className="grid grid-cols-3 gap-4">

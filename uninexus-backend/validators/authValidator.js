@@ -17,6 +17,18 @@ const signupSchema = Joi.object({
     role: Joi.string().valid('student', 'admin').default('student'),
     department: Joi.string().trim().max(100).allow(''),
     year: Joi.number().integer().min(1).max(6),
+    faculty: Joi.string().trim().max(100).required().messages({
+        'any.required': 'Faculty is required',
+    }),
+    studentIdNumber: Joi.string()
+        .alphanum()
+        .length(10)
+        .required()
+        .messages({
+            'string.length': 'Student ID Number must be exactly 10 characters',
+            'string.alphanum': 'Student ID Number must contain only letters and numbers',
+            'any.required': 'Student ID Number is required',
+        }),
 });
 
 const loginSchema = Joi.object({

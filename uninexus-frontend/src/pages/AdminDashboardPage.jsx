@@ -15,6 +15,7 @@ import {
     Tag,
     LogOut,
     Search,
+    Calendar,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ui/Toast';
@@ -193,6 +194,14 @@ const AdminDashboardPage = () => {
                         <span className="text-sm text-text-secondary dark:text-text-dark-secondary hidden sm:block">
                             {user?.name}
                         </span>
+                        <Button variant="secondary" size="sm" onClick={() => navigate('/admin/events')}>
+                            <Calendar size={16} />
+                            Events
+                        </Button>
+                        <Button variant="gradient" size="sm" onClick={() => navigate('/admin/events?create=true')}>
+                            <Plus size={16} />
+                            Create Event
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={handleLogout}>
                             <LogOut size={16} />
                             Logout

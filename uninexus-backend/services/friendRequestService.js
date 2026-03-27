@@ -59,7 +59,7 @@ const getReceivedRequests = async (userId) => {
         to: userId,
         status: 'pending',
     })
-        .populate('from', 'name email department year avatar interests bio')
+        .populate('from', 'name email department year profilePhotoUrl interests bio')
         .sort({ createdAt: -1 });
 
     return requests;
@@ -121,8 +121,8 @@ const getFriends = async (userId) => {
         status: 'accepted',
         $or: [{ from: userId }, { to: userId }],
     })
-        .populate('from', 'name email department year avatar bio interests')
-        .populate('to', 'name email department year avatar bio interests');
+        .populate('from', 'name email department year profilePhotoUrl bio interests')
+        .populate('to', 'name email department year profilePhotoUrl bio interests');
 
     // Extract the "other" user from each request
     const friends = requests.map((req) => {

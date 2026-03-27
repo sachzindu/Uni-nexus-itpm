@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Users, Shield, Plus, ThumbsUp, ThumbsDown, MessageCircle,
-    Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image,
+    Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image, Hash,
 } from 'lucide-react';
 import { groupAPI, postAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,10 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Loader from '../components/ui/Loader';
 import Input from '../components/ui/Input';
+
+import UserAvatar from '../components/ui/UserAvatar';
+import GroupChatTab from '../components/group/GroupChatTab';
+
 
 const GroupDetailPage = () => {
     const { id } = useParams();
@@ -314,6 +318,7 @@ const GroupDetailPage = () => {
             <div className="flex gap-1 mb-6 bg-surface-alt dark:bg-surface-dark rounded-xl p-1 overflow-x-auto">
                 {[
                     { key: 'feed', label: 'Feed', icon: MessageCircle },
+                    ...(isMember ? [{ key: 'chat', label: 'Chat', icon: Hash }] : []),
                     { key: 'members', label: 'Members', icon: Users },
                     ...(isAdmin ? [{ key: 'requests', label: `Requests (${pendingRequests.length})`, icon: UserPlus }] : []),
                 ].map(({ key, label, icon: Icon }) => (
@@ -339,9 +344,7 @@ const GroupDetailPage = () => {
                     {isMember && (
                         <div className="flex justify-between items-center bg-white dark:bg-surface-dark-alt rounded-3xl p-4 card-shadow">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                                    {(user?.name || 'U').charAt(0)}
-                                </div>
+                                <UserAvatar user={user} size="sm" />
                                 <span className="text-text-secondary dark:text-text-dark-secondary">
                                     Share something with the group...
                                 </span>
@@ -371,6 +374,8 @@ const GroupDetailPage = () => {
                                             {(post.author?.name || 'U').charAt(0)}
                                         </div>
                                         <div className="flex-1">
+                                        <UserAvatar user={post.author} size="xs" />
+                                        <div>
                                             <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
                                                 {post.author?.name || 'Unknown'}
                                             </p>
@@ -460,6 +465,11 @@ const GroupDetailPage = () => {
                 </div>
             )}
 
+            {/* Chat Tab */}
+            {tab === 'chat' && isMember && (
+                <GroupChatTab groupId={id} />
+            )}
+
             {/* Members Tab */}
             {tab === 'members' && (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -472,9 +482,7 @@ const GroupDetailPage = () => {
                         const canRemove = isAdmin && !memberIsAdmin && m._id !== user?._id;
                         return (
                             <Card key={m._id} hover={false} className="flex items-center gap-3 !p-4">
-                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
-                                    {m.name?.charAt(0)?.toUpperCase() || '?'}
-                                </div>
+                                <UserAvatar user={m} size="sm" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-text-primary dark:text-text-dark truncate">
                                         {m.name}

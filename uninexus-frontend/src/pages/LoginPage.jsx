@@ -30,9 +30,13 @@ const LoginPage = () => {
 
         setLoading(true);
         try {
-            await login(form.email, form.password);
+            const userData=await login(form.email, form.password);
+             if (userData.role === 'admin') {
+                navigate('/admin/dashboard');
+            } else {
+                navigate('/dashboard');
+            }
             toast.success('Welcome back!');
-            navigate('/dashboard');
         } catch (err) {
             toast.error(err.message || 'Login failed');
         } finally {
