@@ -31,9 +31,14 @@ export const AuthProvider = ({ children }) => {
             setLoading(true);
             const response = await authAPI.getMe();
             setUser(response.data.user);
+            setError(null);
         } catch (err) {
-            localStorage.removeItem('token');
+            // Avoid repeated auth churn: clear local session once and keep state stable.
+            if (localStorage.getItem('token')) {
+                localStorage.removeItem('token');
+            }
             setUser(null);
+            setError(null);
         } finally {
             setLoading(false);
         }
@@ -44,6 +49,9 @@ export const AuthProvider = ({ children }) => {
             setError(null);
             const response = await authAPI.login({ email, password });
             const { user: userData, token } = response.data;
+            if (!userData?._id) {
+                throw new Error('Login response is missing user._id');
+            }
             localStorage.setItem('token', token);
             setUser(userData);
             return userData;
@@ -58,6 +66,9 @@ export const AuthProvider = ({ children }) => {
             setError(null);
             const response = await authAPI.signup(userData);
             const { user: newUser, token } = response.data;
+            if (!newUser?._id) {
+                throw new Error('Signup response is missing user._id');
+            }
             localStorage.setItem('token', token);
             setUser(newUser);
             return newUser;

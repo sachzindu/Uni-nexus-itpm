@@ -24,6 +24,10 @@
     "mongoose": "^9.2.1",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
+<<<<<<< HEAD
+=======
+    "pdfkit": "^0.18.0",
+>>>>>>> 89ca46f41dd57a2b76e79df2bd4f64cb60ee263e
     "socket.io": "^4.8.3"
   },
   "devDependencies": {

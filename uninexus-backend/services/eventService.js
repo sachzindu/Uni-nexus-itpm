@@ -26,6 +26,7 @@ const getEvents = async (query = {}) => {
         filter.$or = [
             { title: { $regex: query.search, $options: 'i' } },
             { description: { $regex: query.search, $options: 'i' } },
+            { location: { $regex: query.search, $options: 'i' } },
         ];
     }
 
@@ -131,6 +132,10 @@ const registerForEvent = async (eventId, userId) => {
             throw createError(400, 'Cannot register for a cancelled event.');
         }
 
+        if (event.status === 'completed') {
+            throw createError(400, 'Cannot register for a completed event.');
+        }
+
         // Check if already registered
         if (event.attendees.some((a) => a.equals(userId))) {
             throw createError(409, 'You are already registered for this event.');
@@ -165,12 +170,7 @@ const unregisterFromEvent = async (eventId, userId) => {
     if (!event) throw createError(404, 'Event not found.');
 
     if (!event.attendees.some((a) => a.equals(userId))) {
-        throw createError(400, 'You are not registered for this event.');
-    }
-
-    // Prevent unregistering from past events
-    if (new Date(event.eventDate) < new Date()) {
-        throw createError(400, 'Cannot unregister from an event that has already passed.');
+        return event;
     }
 
     event.attendees = event.attendees.filter((a) => !a.equals(userId));

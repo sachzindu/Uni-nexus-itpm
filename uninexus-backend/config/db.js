@@ -1,53 +1,27 @@
 const mongoose = require('mongoose');
-const logger = require('../utils/logger');
 
-const MAX_RETRIES = 5;
-const BASE_DELAY_MS = 1000;
-
-/**
- * Connect to MongoDB with exponential-backoff retry logic.
- * @param {number} [retryCount=0] - Current retry attempt
- * @returns {Promise<void>}
- */
-const connectDB = async (retryCount = 0) => {
-    try {
-        const conn = await mongoose.connect(process.env.MONGODB_URI);
-        logger.info(`MongoDB connected: ${conn.connection.host}`);
-    } catch (error) {
-        if (retryCount < MAX_RETRIES) {
-            const delay = BASE_DELAY_MS * Math.pow(2, retryCount);
-            logger.warn(
-                `MongoDB connection failed. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${MAX_RETRIES})`,
-                { error: error.message }
-            );
-            await new Promise((resolve) => setTimeout(resolve, delay));
-            return connectDB(retryCount + 1);
-        }
-        logger.error('MongoDB connection failed after max retries. Exiting.', {
-            error: error.message,
-        });
-        process.exit(1);
+const connectDB = async () => {
+    const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
+    if (!mongoUri) {
+        throw new Error('MONGO_URI (or MONGODB_URI) is required in .env');
     }
+
+    const conn = await mongoose.connect(mongoUri, {
+        serverSelectionTimeoutMS: 10000,
+    });
+
+    const dbName = conn.connection.name || 'unknown';
+    const host = conn.connection.host || 'unknown-host';
+    console.log(`[DB] Connected to MongoDB: ${host} / ${dbName}`);
+    return conn;
 };
 
-// Mongoose connection event listeners
-mongoose.connection.on('connected', () => {
-    logger.info('Mongoose connection established');
-});
-
 mongoose.connection.on('error', (err) => {
-    logger.error('Mongoose connection error', { error: err.message });
+    console.error('[DB] MongoDB connection error:', err.message);
 });
 
 mongoose.connection.on('disconnected', () => {
-    logger.warn('Mongoose connection disconnected');
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-    await mongoose.connection.close();
-    logger.info('Mongoose connection closed through app termination');
-    process.exit(0);
+    console.warn('[DB] MongoDB disconnected');
 });
 
 module.exports = connectDB;

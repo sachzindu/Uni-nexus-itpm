@@ -16,6 +16,8 @@ const SignupPage = () => {
         email: '',
         password: '',
         confirmPassword: '',
+        faculty: '',
+        studentIdNumber: '',
     });
     const [errors, setErrors] = useState({});
     const [loading, setLoading] = useState(false);
@@ -31,6 +33,9 @@ const SignupPage = () => {
             errs.password = 'Password must be at least 6 characters';
         if (form.password !== form.confirmPassword)
             errs.confirmPassword = 'Passwords do not match';
+        if (!form.faculty.trim()) errs.faculty = 'Faculty is required';
+        if (!form.studentIdNumber) errs.studentIdNumber = 'Student ID Number is required';
+        else if (!/^[A-Za-z0-9]{10}$/.test(form.studentIdNumber)) errs.studentIdNumber = 'Student ID Number must be exactly 10 letters and numbers';
         setErrors(errs);
         return Object.keys(errs).length === 0;
     };
@@ -45,6 +50,8 @@ const SignupPage = () => {
                 name: form.name.trim(),
                 email: form.email.trim(),
                 password: form.password,
+                faculty: form.faculty.trim(),
+                studentIdNumber: form.studentIdNumber.trim(),
             });
             toast.success('Account created! Let\'s set up your profile.');
             navigate('/onboarding');
@@ -119,6 +126,20 @@ const SignupPage = () => {
                                 setForm({ ...form, confirmPassword: e.target.value })
                             }
                             error={errors.confirmPassword}
+                        />
+                        <Input
+                            label="Faculty"
+                            placeholder="Faculty of Computing"
+                            value={form.faculty}
+                            onChange={(e) => setForm({ ...form, faculty: e.target.value })}
+                            error={errors.faculty}
+                        />
+                        <Input
+                            label="Student ID Number"
+                            placeholder="e.g. IT12345678"
+                            value={form.studentIdNumber}
+                            onChange={(e) => setForm({ ...form, studentIdNumber: e.target.value })}
+                            error={errors.studentIdNumber}
                         />
 
                         <Button
