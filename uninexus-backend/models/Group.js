@@ -76,7 +76,7 @@ groupSchema.pre('save', function () {
 
 // Virtual: member count
 groupSchema.virtual('memberCount').get(function () {
-    return this.members.length;
+    return Array.isArray(this.members) ? this.members.length : 0;
 });
 
 // Ensure virtuals are serialized

@@ -379,31 +379,45 @@ const GroupDetailPage = () => {
                                             </p>
                                         </div>
                                         {canDelete && (
-                                            <Button
-                                                variant="danger"
-                                                size="icon-sm"
-                                                title="Delete post"
-                                                onClick={async () => {
-                                                    if (window.confirm('Are you sure you want to delete this post?')) {
-                                                        try {
-                                                            await postAPI.delete(id, post._id);
-                                                            setPosts((prev) => prev.filter((p) => p._id !== post._id));
-                                                            toast.success('Post deleted');
-                                                        } catch (err) {
-                                                            toast.error('Failed to delete post');
+                                            <div className="relative group">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    className="text-error hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-error focus:ring-2 focus:ring-error"
+                                                    title="Delete post"
+                                                    aria-label="Delete post"
+                                                    onClick={async () => {
+                                                        if (window.confirm('Are you sure you want to delete this post?')) {
+                                                            try {
+                                                                await postAPI.delete(id, post._id);
+                                                                setPosts((prev) => prev.filter((p) => p._id !== post._id));
+                                                                toast.success('Post deleted');
+                                                            } catch (err) {
+                                                                toast.error('Failed to delete post');
+                                                            }
                                                         }
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 size={16} />
-                                            </Button>
+                                                    }}
+                                                >
+                                                    <Trash2 size={18} />
+                                                </Button>
+                                                <span className="absolute z-10 left-1/2 -translate-x-1/2 top-8 opacity-0 group-hover:opacity-100 pointer-events-none bg-error text-white text-xs rounded px-2 py-1 transition-opacity duration-200 shadow-lg whitespace-nowrap">
+                                                    Delete post
+                                                </span>
+                                            </div>
                                         )}
                                     </div>
                                     <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap mb-3">
                                         {post.content}
                                     </p>
                                     {post.image && (
-                                        <img src={post.image} alt="" className="rounded-2xl mb-3 max-h-80 object-cover w-full" />
+                                        <div className="w-full flex justify-center mb-3">
+                                            <img
+                                                src={post.image}
+                                                alt=""
+                                                className="rounded-2xl max-h-[400px] w-auto object-contain bg-surface-alt dark:bg-surface-dark-alt"
+                                                style={{ maxWidth: '100%' }}
+                                            />
+                                        </div>
                                     )}
                                     <div className="flex items-center gap-4 pt-3 border-t border-border dark:border-border-dark">
                                         {/* Vote Controls */}

@@ -347,45 +347,76 @@ const PostDetailPage = () => {
             <div className="space-y-3">
                 {comments.length > 0 ? (
                     <>
-                        {comments.map((comment, index) => (
-                            <motion.div
-                                key={comment._id || index}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.05 * Math.min(index, 5) }}
-                            >
-                                {/* Rectangle comment card */}
-                                <div className="bg-white dark:bg-surface-dark-alt rounded-xl border border-border dark:border-border-dark p-4">
-                                    <div className="flex gap-3">
-                                        {/* User avatar */}
-                                        <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
-                                            {(comment.user?.name || 'U').charAt(0)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            {/* Name and time */}
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                                    {comment.user?.name || 'Unknown User'}
-                                                </p>
-                                                <span className="text-[10px] text-text-secondary dark:text-text-dark-secondary flex items-center gap-0.5">
-                                                    <Clock size={9} />
-                                                    {new Date(comment.createdAt).toLocaleDateString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                    })}
-                                                </span>
+                        {comments.map((comment, index) => {
+                            // Permission: comment author, post author, group admin, or platform admin
+                            const isCommentAuthor = comment.user?._id === user?._id;
+                            const isPostAuthor = post?.author?._id === user?._id;
+                            const isPlatformAdmin = user?.role === 'admin';
+                            const isGroupAdmin = group?.admins?.some((a) => (typeof a === 'string' ? a : a._id) === user?._id);
+                            const canDelete = isCommentAuthor || isPostAuthor || isGroupAdmin || isPlatformAdmin;
+                            return (
+                                <motion.div
+                                    key={comment._id || index}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.05 * Math.min(index, 5) }}
+                                >
+                                    {/* Rectangle comment card */}
+                                    <div className="bg-white dark:bg-surface-dark-alt rounded-xl border border-border dark:border-border-dark p-4">
+                                        <div className="flex gap-3">
+                                            {/* User avatar */}
+                                            <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
+                                                {(comment.user?.name || 'U').charAt(0)}
                                             </div>
-                                            {/* Comment text */}
-                                            <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap leading-relaxed">
-                                                {comment.content}
-                                            </p>
+                                            <div className="flex-1 min-w-0">
+                                                {/* Name and time */}
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
+                                                        {comment.user?.name || 'Unknown User'}
+                                                    </p>
+                                                    <span className="text-[10px] text-text-secondary dark:text-text-dark-secondary flex items-center gap-0.5">
+                                                        <Clock size={9} />
+                                                        {new Date(comment.createdAt).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })}
+                                                    </span>
+                                                    {canDelete && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            className="text-error hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-error ml-2"
+                                                            title="Delete comment"
+                                                            aria-label="Delete comment"
+                                                            onClick={async () => {
+                                                                if (window.confirm('Delete this comment?')) {
+                                                                    try {
+                                                                        await postAPI.deleteComment(groupId, postId, comment._id);
+                                                                        setComments((prev) => prev.filter((c) => c._id !== comment._id));
+                                                                        setCommentPagination((prev) => ({ ...prev, total: prev.total - 1 }));
+                                                                        toast.success('Comment deleted');
+                                                                    } catch (err) {
+                                                                        toast.error('Failed to delete comment');
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            <X size={14} />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                {/* Comment text */}
+                                                <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap leading-relaxed">
+                                                    {comment.content}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
 
                         {/* Load More Button */}
                         {hasMore && (

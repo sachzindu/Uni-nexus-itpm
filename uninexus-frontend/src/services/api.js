@@ -105,6 +105,8 @@ export const postAPI = {
         api.post(`/groups/${groupId}/posts/${postId}/comments`, data),
     getComments: (groupId, postId, params) =>
         api.get(`/groups/${groupId}/posts/${postId}/comments`, { params }),
+    deleteComment: (groupId, postId, commentId) =>
+        api.delete(`/groups/${groupId}/posts/${postId}/comments/${commentId}`),
 };
 
 // ─── Event API ───────────────────────────────────────────────
