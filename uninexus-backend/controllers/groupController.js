@@ -91,7 +91,7 @@ const deleteGroup = async (req, res, next) => {
  * @access  Private
  */
 const requestJoin = async (req, res, next) => {
-    try {
+    try { 
         const group = await groupService.requestJoin(req.params.id, req.user._id);
         res.status(200).json({
             success: true,
@@ -158,6 +158,28 @@ const getMembers = async (req, res, next) => {
     }
 };
 
+/**
+ * @desc    Remove a member from a group (admin only)
+ * @route   DELETE /api/groups/:groupId/members/:memberId
+ * @access  Private (Group Admin)
+ */
+const removeMember = async (req, res, next) => {
+    try {
+        const group = await groupService.removeMember(
+            req.params.groupId,
+            req.params.memberId,
+            req.user._id
+        );
+        res.status(200).json({
+            success: true,
+            message: 'Member removed successfully',
+            data: { group },
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createGroup,
     getGroups,
@@ -168,4 +190,5 @@ module.exports = {
     handleJoinRequest,
     leaveGroup,
     getMembers,
+    removeMember,
 };

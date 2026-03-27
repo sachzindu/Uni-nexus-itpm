@@ -236,4 +236,29 @@ module.exports = {
     handleJoinRequest,
     leaveGroup,
     getMembers,
+    /**
+     * Remove a member from a group. Only admins can remove others.
+     */
+    removeMember: async (groupId, memberId, requesterId) => {
+        const group = await Group.findById(groupId);
+        if (!group) throw createError(404, 'Group not found.');
+
+        // Only admins can remove
+        if (!group.admins.some((admin) => admin.equals(requesterId))) {
+            throw createError(403, 'Only group admins can remove members.');
+        }
+
+        // Prevent removing self with this endpoint (use leaveGroup)
+        if (memberId === requesterId.toString()) {
+            throw createError(400, 'Admins cannot remove themselves with this action. Use leave group.');
+        }
+
+        // Remove from members
+        group.members = group.members.filter((m) => m.toString() !== memberId);
+        // Remove from admins if applicable
+        group.admins = group.admins.filter((a) => a.toString() !== memberId);
+
+        await group.save();
+        return group;
+    },
 };

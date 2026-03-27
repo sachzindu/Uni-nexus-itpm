@@ -105,6 +105,7 @@ export const groupAPI = {
         api.put(`/groups/${groupId}/join-requests/${requestId}`, data),
     leave: (id) => api.post(`/groups/${id}/leave`),
     getMembers: (id) => api.get(`/groups/${id}/members`),
+    removeMember: (groupId, memberId) => api.delete(`/groups/${groupId}/members/${memberId}`),
 };
 
 // ─── Post API ────────────────────────────────────────────────
