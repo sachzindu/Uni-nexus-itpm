@@ -35,39 +35,39 @@ const GroupDetailPage = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
     const [editForm, setEditForm] = useState({ name: '', description: '', tags: '' });
-        // Open edit modal and populate form
-        const openEditModal = () => {
-            setEditForm({
-                name: group?.name || '',
-                description: group?.description || '',
-                tags: (group?.tags || []).join(', '),
-            });
-            setShowEditModal(true);
-        };
+    // Open edit modal and populate form
+    const openEditModal = () => {
+        setEditForm({
+            name: group?.name || '',
+            description: group?.description || '',
+            tags: (group?.tags || []).join(', '),
+        });
+        setShowEditModal(true);
+    };
 
-        const handleEditChange = (e) => {
-            setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-        };
+    const handleEditChange = (e) => {
+        setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
 
-        const handleEditSubmit = async (e) => {
-            e.preventDefault();
-            setEditLoading(true);
-            try {
-                const payload = {
-                    name: editForm.name,
-                    description: editForm.description,
-                    tags: editForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
-                };
-                const res = await groupAPI.update(id, payload);
-                setGroup(res.data?.group || res.data);
-                toast.success('Group updated');
-                setShowEditModal(false);
-            } catch (err) {
-                toast.error(err.message || 'Failed to update group');
-            } finally {
-                setEditLoading(false);
-            }
-        };
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        setEditLoading(true);
+        try {
+            const payload = {
+                name: editForm.name,
+                description: editForm.description,
+                tags: editForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
+            };
+            const res = await groupAPI.update(id, payload);
+            setGroup(res.data?.group || res.data);
+            toast.success('Group updated');
+            setShowEditModal(false);
+        } catch (err) {
+            toast.error(err.message || 'Failed to update group');
+        } finally {
+            setEditLoading(false);
+        }
+    };
     // Delete group handler (admin only)
     const handleDeleteGroup = async () => {
         if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
@@ -259,36 +259,36 @@ const GroupDetailPage = () => {
                             </Button>
                         )}
                     </div>
-                            {/* Edit Group Modal */}
-                            <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
-                                <form onSubmit={handleEditSubmit} className="space-y-4">
-                                    <Input
-                                        label="Group Name"
-                                        name="name"
-                                        value={editForm.name}
-                                        onChange={handleEditChange}
-                                        required
-                                    />
-                                    <Input
-                                        label="Description"
-                                        name="description"
-                                        value={editForm.description}
-                                        onChange={handleEditChange}
-                                        as="textarea"
-                                        rows={3}
-                                    />
-                                    <Input
-                                        label="Tags (comma separated)"
-                                        name="tags"
-                                        value={editForm.tags}
-                                        onChange={handleEditChange}
-                                    />
-                                    <div className="flex justify-end gap-2">
-                                        <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
-                                        <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
-                                    </div>
-                                </form>
-                            </Modal>
+                    {/* Edit Group Modal */}
+                    <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
+                        <form onSubmit={handleEditSubmit} className="space-y-4">
+                            <Input
+                                label="Group Name"
+                                name="name"
+                                value={editForm.name}
+                                onChange={handleEditChange}
+                                required
+                            />
+                            <Input
+                                label="Description"
+                                name="description"
+                                value={editForm.description}
+                                onChange={handleEditChange}
+                                as="textarea"
+                                rows={3}
+                            />
+                            <Input
+                                label="Tags (comma separated)"
+                                name="tags"
+                                value={editForm.tags}
+                                onChange={handleEditChange}
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                                <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
+                            </div>
+                        </form>
+                    </Modal>
                 </div>
 
                 {/* Stats */}
@@ -370,40 +370,39 @@ const GroupDetailPage = () => {
                             return (
                                 <Card key={post._id} hover={false}>
                                     <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
-                                            {(post.author?.name || 'U').charAt(0)}
-                                        </div>
+
                                         <div className="flex-1">
-                                        <UserAvatar user={post.author} size="xs" />
-                                        <div>
-                                            <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                                {post.author?.name || 'Unknown'}
-                                            </p>
-                                            <p className="text-[10px] text-text-secondary dark:text-text-dark-secondary">
-                                                {new Date(post.createdAt).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                        {canDelete && (
-                                            <Button
-                                                variant="danger"
-                                                size="icon-sm"
-                                                title="Delete post"
-                                                onClick={async () => {
-                                                    if (window.confirm('Are you sure you want to delete this post?')) {
-                                                        try {
-                                                            await postAPI.delete(id, post._id);
-                                                            setPosts((prev) => prev.filter((p) => p._id !== post._id));
-                                                            toast.success('Post deleted');
-                                                        } catch (err) {
-                                                            toast.error('Failed to delete post');
+                                            <UserAvatar user={post.author} size="xs" />
+                                            <div>
+                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
+                                                    {post.author?.name || 'Unknown'}
+                                                </p>
+                                                <p className="text-[10px] text-text-secondary dark:text-text-dark-secondary">
+                                                    {new Date(post.createdAt).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            {canDelete && (
+                                                <Button
+                                                    variant="danger"
+                                                    size="sm"
+
+                                                    title="Delete post"
+                                                    onClick={async () => {
+                                                        if (window.confirm('Are you sure you want to delete this post?')) {
+                                                            try {
+                                                                await postAPI.delete(id, post._id);
+                                                                setPosts((prev) => prev.filter((p) => p._id !== post._id));
+                                                                toast.success('Post deleted');
+                                                            } catch (err) {
+                                                                toast.error('Failed to delete post');
+                                                            }
                                                         }
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 size={16} />
-                                            </Button>
-                                        )}
-                                    </div>
+                                                    }}
+                                                >
+                                                    <Trash2 size={12} />
+                                                </Button>
+                                            )}
+                                        </div></div>
                                     <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap mb-3">
                                         {post.content}
                                     </p>
@@ -424,10 +423,10 @@ const GroupDetailPage = () => {
                                                 <ThumbsUp size={16} className={hasUpvoted ? 'fill-accent-purple' : ''} />
                                             </button>
                                             <span className={`text-sm font-bold min-w-[2ch] text-center ${voteScore > 0
-                                                    ? 'text-accent-purple'
-                                                    : voteScore < 0
-                                                        ? 'text-red-500'
-                                                        : 'text-text-secondary dark:text-text-dark-secondary'
+                                                ? 'text-accent-purple'
+                                                : voteScore < 0
+                                                    ? 'text-red-500'
+                                                    : 'text-text-secondary dark:text-text-dark-secondary'
                                                 }`}>
                                                 {voteScore}
                                             </span>
