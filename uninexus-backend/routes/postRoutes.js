@@ -38,4 +38,7 @@ router.route('/:postId/comments')
     .get(getComments)
     .post(validate(addCommentSchema), addComment);
 
+// Delete a comment
+router.delete('/:postId/comments/:commentId', require('../controllers/postController').deleteComment);
+
 module.exports = router;

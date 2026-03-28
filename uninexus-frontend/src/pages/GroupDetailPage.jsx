@@ -14,10 +14,8 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Loader from '../components/ui/Loader';
 import Input from '../components/ui/Input';
-
 import UserAvatar from '../components/ui/UserAvatar';
 import GroupChatTab from '../components/group/GroupChatTab';
-
 
 const GroupDetailPage = () => {
     const { id } = useParams();
@@ -28,13 +26,12 @@ const GroupDetailPage = () => {
     const [group, setGroup] = useState(null);
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [newPost, setNewPost] = useState('');
-    const [posting, setPosting] = useState(false);
     const [tab, setTab] = useState('feed');
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
     const [editForm, setEditForm] = useState({ name: '', description: '', tags: '' });
+
     // Open edit modal and populate form
     const openEditModal = () => {
         setEditForm({
@@ -51,16 +48,25 @@ const GroupDetailPage = () => {
 
     const handleEditSubmit = async (e) => {
         e.preventDefault();
+
+        const name = editForm.name.trim();
+        const description = editForm.description.trim();
+        const tagsArray = editForm.tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
+
+        if (!name) return toast.error('Group name is required');
+        if (name.length < 3) return toast.error('Group name must be at least 3 characters');
+        if (!description) return toast.error('Description is required');
+        if (description.length < 10) return toast.error('Description must be at least 10 characters');
+        if (tagsArray.length === 0) return toast.error('At least one tag is required');
+
         setEditLoading(true);
         try {
-            const payload = {
-                name: editForm.name,
-                description: editForm.description,
-                tags: editForm.tags.split(',').map((t) => t.trim()).filter(Boolean),
-            };
-            const res = await groupAPI.update(id, payload);
+            const res = await groupAPI.update(id, { name, description, tags: tagsArray });
             setGroup(res.data?.group || res.data);
-            toast.success('Group updated');
+            toast.success('Group updated successfully');
             setShowEditModal(false);
         } catch (err) {
             toast.error(err.message || 'Failed to update group');
@@ -68,6 +74,7 @@ const GroupDetailPage = () => {
             setEditLoading(false);
         }
     };
+
     // Delete group handler (admin only)
     const handleDeleteGroup = async () => {
         if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
@@ -82,13 +89,6 @@ const GroupDetailPage = () => {
             setDeleteLoading(false);
         }
     };
-
-    const isAdmin = (group?.admins || []).some(
-        (a) => (typeof a === 'string' ? a : a._id) === user?._id
-    );
-    const isMember = group?.members?.some(
-        (m) => (typeof m === 'string' ? m : m._id) === user?._id
-    );
 
     useEffect(() => {
         const fetchData = async () => {
@@ -181,6 +181,12 @@ const GroupDetailPage = () => {
 
     if (!group) return null;
 
+    const isAdmin = (group?.admins || []).some(
+        (a) => (typeof a === 'string' ? a : a._id) === user?._id
+    );
+    const isMember = group?.members?.some(
+        (m) => (typeof m === 'string' ? m : m._id) === user?._id
+    );
     const pendingRequests = group.joinRequests?.filter((r) => r.status === 'pending') || [];
 
     return (
@@ -188,8 +194,7 @@ const GroupDetailPage = () => {
             {/* Back */}
             <button
                 onClick={() => navigate('/groups')}
-                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary
-          hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
+                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
             >
                 <ArrowLeft size={18} />
                 <span className="text-sm font-medium">Back to Groups</span>
@@ -202,6 +207,7 @@ const GroupDetailPage = () => {
                 className="bg-white dark:bg-surface-dark-alt rounded-3xl card-shadow p-6 md:p-8 mb-6"
             >
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    {/* Left: Group info */}
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-2xl gradient-bg flex items-center justify-center text-white text-2xl font-bold">
                             {group.name?.charAt(0)}
@@ -222,6 +228,8 @@ const GroupDetailPage = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Right: Action buttons */}
                     <div className="flex items-center gap-2">
                         {isMember ? (
                             <>
@@ -314,6 +322,37 @@ const GroupDetailPage = () => {
                 </div>
             </motion.div>
 
+            {/* Edit Group Modal */}
+            <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
+                <form onSubmit={handleEditSubmit} className="space-y-4">
+                    <Input
+                        label="Group Name"
+                        name="name"
+                        value={editForm.name}
+                        onChange={handleEditChange}
+                        required
+                    />
+                    <Input
+                        label="Description"
+                        name="description"
+                        value={editForm.description}
+                        onChange={handleEditChange}
+                        as="textarea"
+                        rows={3}
+                    />
+                    <Input
+                        label="Tags (comma separated)"
+                        name="tags"
+                        value={editForm.tags}
+                        onChange={handleEditChange}
+                    />
+                    <div className="flex justify-end gap-2">
+                        <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                        <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
+                    </div>
+                </form>
+            </Modal>
+
             {/* Tabs */}
             <div className="flex gap-1 mb-6 bg-surface-alt dark:bg-surface-dark rounded-xl p-1 overflow-x-auto">
                 {[
@@ -325,11 +364,10 @@ const GroupDetailPage = () => {
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
-              transition-all cursor-pointer whitespace-nowrap ${tab === key
-                                ? 'bg-white dark:bg-surface-dark-alt card-shadow text-text-primary dark:text-text-dark'
-                                : 'text-text-secondary dark:text-text-dark-secondary hover:text-text-primary'
-                            }`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${tab === key
+                            ? 'bg-white dark:bg-surface-dark-alt card-shadow text-text-primary dark:text-text-dark'
+                            : 'text-text-secondary dark:text-text-dark-secondary hover:text-text-primary'
+                        }`}
                     >
                         <Icon size={16} />
                         {label}
@@ -364,11 +402,11 @@ const GroupDetailPage = () => {
                             const voteScore = (post.upvoteCount || post.upvotes?.length || 0)
                                 - (post.downvoteCount || post.downvotes?.length || 0);
                             const commentCount = post.commentCount ?? post.comments?.length ?? 0;
-
-                            // Only show delete if user is author or group admin
                             const canDelete = (post.author?._id === user?._id) || isAdmin;
+
                             return (
                                 <Card key={post._id} hover={false}>
+                                    {/* Post Header */}
                                     <div className="flex items-center gap-3 mb-3">
 
                                         <div className="flex-1">
@@ -381,12 +419,15 @@ const GroupDetailPage = () => {
                                                     {new Date(post.createdAt).toLocaleDateString()}
                                                 </p>
                                             </div>
-                                            {canDelete && (
+                                        </div>
+                                        {canDelete && (
+                                            <div className="relative group">
                                                 <Button
-                                                    variant="danger"
-                                                    size="sm"
-
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    className="text-error hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-error focus:ring-2 focus:ring-error"
                                                     title="Delete post"
+                                                    aria-label="Delete post"
                                                     onClick={async () => {
                                                         if (window.confirm('Are you sure you want to delete this post?')) {
                                                             try {
@@ -399,16 +440,33 @@ const GroupDetailPage = () => {
                                                         }
                                                     }}
                                                 >
-                                                    <Trash2 size={12} />
+                                                    <Trash2 size={18} />
                                                 </Button>
-                                            )}
-                                        </div></div>
+                                                <span className="absolute z-10 left-1/2 -translate-x-1/2 top-8 opacity-0 group-hover:opacity-100 pointer-events-none bg-error text-white text-xs rounded px-2 py-1 transition-opacity duration-200 shadow-lg whitespace-nowrap">
+                                                    Delete post
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Post Content */}
                                     <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap mb-3">
                                         {post.content}
                                     </p>
+
+                                    {/* Post Image */}
                                     {post.image && (
-                                        <img src={post.image} alt="" className="rounded-2xl mb-3 max-h-80 object-cover w-full" />
+                                        <div className="w-full flex justify-center mb-3">
+                                            <img
+                                                src={post.image}
+                                                alt=""
+                                                className="rounded-2xl max-h-[400px] w-auto object-contain bg-surface-alt dark:bg-surface-dark-alt"
+                                                style={{ maxWidth: '100%' }}
+                                            />
+                                        </div>
                                     )}
+
+                                    {/* Post Actions */}
                                     <div className="flex items-center gap-4 pt-3 border-t border-border dark:border-border-dark">
                                         {/* Vote Controls */}
                                         <div className="flex items-center gap-1">
@@ -417,7 +475,7 @@ const GroupDetailPage = () => {
                                                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${hasUpvoted
                                                     ? 'text-accent-purple bg-accent-purple/10'
                                                     : 'text-text-secondary hover:text-accent-purple hover:bg-accent-purple/5'
-                                                    }`}
+                                                }`}
                                                 title="Upvote"
                                             >
                                                 <ThumbsUp size={16} className={hasUpvoted ? 'fill-accent-purple' : ''} />
@@ -427,7 +485,7 @@ const GroupDetailPage = () => {
                                                 : voteScore < 0
                                                     ? 'text-red-500'
                                                     : 'text-text-secondary dark:text-text-dark-secondary'
-                                                }`}>
+                                            }`}>
                                                 {voteScore}
                                             </span>
                                             <button
@@ -435,7 +493,7 @@ const GroupDetailPage = () => {
                                                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${hasDownvoted
                                                     ? 'text-red-500 bg-red-500/10'
                                                     : 'text-text-secondary hover:text-red-500 hover:bg-red-500/5'
-                                                    }`}
+                                                }`}
                                                 title="Downvote"
                                             >
                                                 <ThumbsDown size={16} className={hasDownvoted ? 'fill-red-500' : ''} />
@@ -477,7 +535,6 @@ const GroupDetailPage = () => {
                         const memberIsAdmin = (group.admins || []).some(
                             (a) => (typeof a === 'string' ? a : a._id) === m._id
                         );
-                        // Only show Remove button if current user is admin, member is not admin, and not self
                         const canRemove = isAdmin && !memberIsAdmin && m._id !== user?._id;
                         return (
                             <Card key={m._id} hover={false} className="flex items-center gap-3 !p-4">
@@ -501,7 +558,6 @@ const GroupDetailPage = () => {
                                             if (!window.confirm(`Remove ${m.name || 'this user'} from the group?`)) return;
                                             try {
                                                 await groupAPI.removeMember(id, m._id);
-                                                // Refresh group data
                                                 const grpRes = await groupAPI.getById(id);
                                                 setGroup(grpRes.data?.group || grpRes.data);
                                                 toast.success('Member removed');

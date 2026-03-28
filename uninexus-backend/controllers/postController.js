@@ -1,3 +1,21 @@
+/**
+ * @desc    Delete a comment from a post
+ * @route   DELETE /api/groups/:groupId/posts/:postId/comments/:commentId
+ * @access  Private (Comment author, Post author, Group Admin, Platform Admin)
+ */
+const deleteComment = async (req, res, next) => {
+    try {
+        await postService.deleteComment(
+            req.params.postId,
+            req.params.commentId,
+            req.user._id,
+            req.user.role
+        );
+        res.status(200).json({ success: true, message: 'Comment deleted successfully' });
+    } catch (error) {
+        next(error);
+    }
+};
 const postService = require('../services/postService');
 
 /**
@@ -187,4 +205,5 @@ module.exports = {
     toggleDownvote,
     addComment,
     getComments,
+    deleteComment,
 };
