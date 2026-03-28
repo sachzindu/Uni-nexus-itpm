@@ -267,6 +267,36 @@ const GroupDetailPage = () => {
                             </Button>
                         )}
                     </div>
+                    {/* Edit Group Modal */}
+                    <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
+                        <form onSubmit={handleEditSubmit} className="space-y-4">
+                            <Input
+                                label="Group Name"
+                                name="name"
+                                value={editForm.name}
+                                onChange={handleEditChange}
+                                required
+                            />
+                            <Input
+                                label="Description"
+                                name="description"
+                                value={editForm.description}
+                                onChange={handleEditChange}
+                                as="textarea"
+                                rows={3}
+                            />
+                            <Input
+                                label="Tags (comma separated)"
+                                name="tags"
+                                value={editForm.tags}
+                                onChange={handleEditChange}
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                                <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
+                            </div>
+                        </form>
+                    </Modal>
                 </div>
 
                 {/* Stats */}
@@ -378,9 +408,7 @@ const GroupDetailPage = () => {
                                 <Card key={post._id} hover={false}>
                                     {/* Post Header */}
                                     <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
-                                            {(post.author?.name || 'U').charAt(0)}
-                                        </div>
+
                                         <div className="flex-1">
                                             <UserAvatar user={post.author} size="xs" />
                                             <div>

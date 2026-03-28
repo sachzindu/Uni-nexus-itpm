@@ -339,9 +339,6 @@ const EventDetailPage = () => {
                                         <Check size={14} />
                                         Registered
                                     </Badge>
-                                    <Button variant="ghost" size="sm" onClick={handleUnregister}>
-                                        Cancel Registration
-                                    </Button>
                                 </div>
                             ) : (
                                 <Button

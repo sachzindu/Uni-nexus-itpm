@@ -2,6 +2,67 @@ import { useState } from 'react';
 import Input from './ui/Input';
 import Button from './ui/Button';
 
+const validateForm = (formData) => {
+    const newErrors = {};
+
+    // Title: required, 5-100 chars
+    const title = formData.title?.trim() ?? '';
+    if (!title) {
+        newErrors.title = 'Title is required';
+    } else if (title.length < 5) {
+        newErrors.title = 'Title must be at least 5 characters';
+    } else if (title.length > 100) {
+        newErrors.title = 'Title must be 100 characters or fewer';
+    }
+
+    // Event date: required, must be in the future
+    if (!formData.eventDate) {
+        newErrors.eventDate = 'Event date & time is required';
+    } else {
+        const d = new Date(formData.eventDate);
+        if (Number.isNaN(d.getTime())) {
+            newErrors.eventDate = 'Enter a valid date';
+        } else if (d <= new Date()) {
+            newErrors.eventDate = 'Must be a future date & time';
+        }
+    }
+
+    // Location: required, min 3 chars
+    const location = formData.location?.trim() ?? '';
+    if (!location) {
+        newErrors.location = 'Location is required';
+    } else if (location.length < 3) {
+        newErrors.location = 'Please enter a more specific location';
+    }
+
+    // Max attendees: optional, integer 1-10,000
+    if (formData.maxAttendees !== '' && formData.maxAttendees !== undefined) {
+        const n = Number(formData.maxAttendees);
+        if (!Number.isInteger(n) || n < 1 || n > 10000) {
+            newErrors.maxAttendees = 'Enter a whole number between 1 and 10,000';
+        }
+    }
+
+    // Tags: optional, max 8 tags, each <=30 chars, alphanumeric/hyphens/underscores/spaces only
+    if (formData.tags?.trim()) {
+        const tags = formData.tags.split(',').map((t) => t.trim()).filter(Boolean);
+        if (tags.length > 8) {
+            newErrors.tags = 'Maximum 8 tags allowed';
+        } else if (tags.some((t) => t.length > 30)) {
+            newErrors.tags = 'Each tag must be 30 characters or fewer';
+        } else if (tags.some((t) => /[^a-zA-Z0-9\s\-_]/.test(t))) {
+            newErrors.tags = 'Tags can only contain letters, numbers, hyphens, and underscores';
+        }
+    }
+
+    // Category: required selection
+    if (!formData.category) {
+        newErrors.category = 'Please select a category';
+    }
+
+    return newErrors;
+};
+
 const toInputDateTime = (value) => {
     if (!value) return '';
     const date = new Date(value);
@@ -42,15 +103,20 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
         setPreview(URL.createObjectURL(file));
     };
 
+    const clearFieldError = (field) => {
+        if (errors[field]) {
+            setErrors((prev) => ({ ...prev, [field]: '' }));
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const nextErrors = {};
-        if (!formData.title.trim()) nextErrors.title = 'Event title is required';
-        if (!formData.eventDate) nextErrors.eventDate = 'Event date and time is required';
-
-        if (Object.keys(nextErrors).length > 0) {
-            setErrors(nextErrors);
+        const newErrors = validateForm(formData);
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            const firstKey = Object.keys(newErrors)[0];
+            document.getElementById(firstKey)?.focus();
             return;
         }
 
@@ -90,20 +156,30 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <Input
+                id="title"
                 label="Event Title"
                 placeholder="e.g., Intro to React Workshop"
                 value={formData.title || ''}
                 error={errors.title}
                 onChange={(e) => {
                     setFormData((prev) => ({ ...prev, title: e.target.value }));
-                    if (errors.title) setErrors((prev) => ({ ...prev, title: '' }));
+                    clearFieldError('title');
                 }}
             />
+            <p className="text-xs text-right text-text-secondary dark:text-text-dark-secondary -mt-2">
+                {(formData.title || '').length}/100
+            </p>
             <div className="space-y-1.5">
-                <label className="block text-sm font-medium text-text-primary dark:text-text-dark">
+                <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-text-primary dark:text-text-dark">
                     Description
-                </label>
+                    </label>
+                    <span className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                        {(formData.description || '').length}/500
+                    </span>
+                </div>
                 <textarea
+                    id="description"
                     placeholder="What's the event about?"
                     value={formData.description || ''}
                     onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
@@ -113,36 +189,52 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
+                    id="eventDate"
                     label="Event Date & Time"
                     type="datetime-local"
                     value={formData.eventDate || ''}
                     error={errors.eventDate}
                     onChange={(e) => {
                         setFormData((prev) => ({ ...prev, eventDate: e.target.value }));
-                        if (errors.eventDate) setErrors((prev) => ({ ...prev, eventDate: '' }));
+                        clearFieldError('eventDate');
                     }}
                 />
                 <Input
+                    id="location"
                     label="Location"
                     placeholder="e.g., Room 301, Main Building"
                     value={formData.location || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+                    error={errors.location}
+                    onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, location: e.target.value }));
+                        clearFieldError('location');
+                    }}
                 />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
-                    label="Max Attendees (optional)"
+                    id="maxAttendees"
+                    label="Max Attendees"
                     type="number"
                     min="1"
                     placeholder="e.g., 50"
                     value={formData.maxAttendees || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, maxAttendees: e.target.value }))}
+                    error={errors.maxAttendees}
+                    onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, maxAttendees: e.target.value }));
+                        clearFieldError('maxAttendees');
+                    }}
                 />
                 <Input
+                    id="tags"
                     label="Tags (comma-separated)"
                     placeholder="e.g., react, workshop"
                     value={formData.tags || ''}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, tags: e.target.value }))}
+                    error={errors.tags}
+                    onChange={(e) => {
+                        setFormData((prev) => ({ ...prev, tags: e.target.value }));
+                        clearFieldError('tags');
+                    }}
                 />
             </div>
 
@@ -155,14 +247,25 @@ const EventForm = ({ initialData, onSubmit, loading }) => {
                         Category
                     </label>
                     <select
+                        id="category"
                         value={formData.category}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                        className="w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                        onChange={(e) => {
+                            setFormData((prev) => ({ ...prev, category: e.target.value }));
+                            clearFieldError('category');
+                        }}
+                        className={`w-full px-3 py-2.5 bg-white dark:bg-surface-dark-alt border rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50 ${
+                            errors.category
+                                ? 'border-error focus:ring-error/50'
+                                : 'border-border dark:border-border-dark'
+                        }`}
                     >
                         {['Academic', 'Sports', 'Cultural', 'Workshop', 'Social', 'Career', 'Other'].map((cat) => (
                             <option key={cat} value={cat}>{cat}</option>
                         ))}
                     </select>
+                    {errors.category && (
+                        <p className="text-sm text-error mt-1">{errors.category}</p>
+                    )}
                 </div>
                 <div className="space-y-1">
                     <label className="text-sm font-medium text-text-primary dark:text-text-dark">
