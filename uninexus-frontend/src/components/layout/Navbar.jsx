@@ -6,10 +6,10 @@ import {
     Users,
     Calendar,
     MessageCircle,
-    Bell,
     Search,
     Sun,
     Moon,
+    Bell,
     Menu,
     X,
     ChevronDown,
@@ -33,23 +33,17 @@ const navLinks = [
 const Navbar = () => {
     const { user, isAuthenticated, logout } = useAuth();
     const { darkMode, toggleDarkMode } = useTheme();
-    const {
-        notifications,
-        unreadNotificationCount,
-        markAllNotificationsRead,
-        removeNotification,
-    } = useSocket();
+    const { unreadCount, notifications, markAllNotificationsRead } = useSocket();
     const location = useLocation();
     const navigate = useNavigate();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
-    const [notificationOpen, setNotificationOpen] = useState(false);
+    const [notifOpen, setNotifOpen] = useState(false);
 
     const handleLogout = async () => {
         await logout();
         navigate('/');
         setProfileOpen(false);
-        setNotificationOpen(false);
     };
 
     const isActive = (path) => location.pathname === path;
@@ -97,76 +91,6 @@ const Navbar = () => {
 
                     {/* Right side */}
                     <div className="flex items-center gap-3">
-                        {isAuthenticated && (
-                            <div className="relative">
-                                <button
-                                    onClick={() => {
-                                        setNotificationOpen(!notificationOpen);
-                                        setProfileOpen(false);
-                                        if (!notificationOpen) {
-                                            markAllNotificationsRead();
-                                        }
-                                    }}
-                                    className="relative p-2 rounded-xl hover:bg-surface-alt dark:hover:bg-surface-dark-alt
-                text-text-secondary dark:text-text-dark-secondary transition-colors cursor-pointer"
-                                >
-                                    <Bell size={20} />
-                                    {unreadNotificationCount > 0 && (
-                                        <span
-                                            className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full
-                      bg-error text-white text-[10px] font-bold flex items-center justify-center"
-                                        >
-                                            {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
-                                        </span>
-                                    )}
-                                </button>
-
-                                <AnimatePresence>
-                                    {notificationOpen && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                                            className="absolute right-0 mt-2 w-80 max-h-[420px] overflow-y-auto py-2
-                        bg-white dark:bg-surface-dark-alt
-                        rounded-2xl card-shadow border border-border dark:border-border-dark"
-                                        >
-                                            <div className="px-4 py-2 border-b border-border dark:border-border-dark">
-                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                                    Notifications
-                                                </p>
-                                            </div>
-                                            {notifications.length === 0 ? (
-                                                <p className="px-4 py-4 text-sm text-text-secondary dark:text-text-dark-secondary">
-                                                    No new notifications
-                                                </p>
-                                            ) : (
-                                                notifications.map((notification) => (
-                                                    <button
-                                                        key={notification.id}
-                                                        onClick={() => {
-                                                            setNotificationOpen(false);
-                                                            navigate(`/chat?chatId=${notification.chatGroupId}`);
-                                                            removeNotification(notification.id);
-                                                        }}
-                                                        className="w-full text-left px-4 py-3 hover:bg-surface-alt dark:hover:bg-surface-dark transition-colors cursor-pointer"
-                                                    >
-                                                        <p className="text-sm text-text-primary dark:text-text-dark line-clamp-1">
-                                                            <span className="font-semibold">{notification.senderName}</span>{' '}
-                                                            sent you a message
-                                                        </p>
-                                                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary line-clamp-1">
-                                                            {notification.content}
-                                                        </p>
-                                                    </button>
-                                                ))
-                                            )}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        )}
-
                         {/* Dark mode toggle */}
                         <motion.button
                             whileTap={{ scale: 0.9 }}
@@ -177,13 +101,98 @@ const Navbar = () => {
                             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
                         </motion.button>
 
+                        {/* Notifications */}
+                        {isAuthenticated && (
+                            <div className="relative">
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={() => {
+                                        setNotifOpen((o) => {
+                                            const next = !o;
+                                            if (!o && next) {
+                                                // Mark as read when opening the dropdown
+                                                markAllNotificationsRead?.();
+                                            }
+                                            return next;
+                                        });
+                                        setProfileOpen(false);
+                                    }}
+                                    className="relative p-2 rounded-xl hover:bg-surface-alt dark:hover:bg-surface-dark-alt
+                text-text-secondary dark:text-text-dark-secondary transition-colors cursor-pointer"
+                                    aria-label="Notifications"
+                                >
+                                    <Bell size={20} />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1
+                      rounded-full bg-error text-white text-[10px] font-bold
+                      flex items-center justify-center">
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </span>
+                                    )}
+                                </motion.button>
+
+                                <AnimatePresence>
+                                    {notifOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                                            className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden
+                        bg-white dark:bg-surface-dark-alt rounded-2xl card-shadow
+                        border border-border dark:border-border-dark"
+                                        >
+                                            <div className="px-4 py-3 border-b border-border dark:border-border-dark">
+                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
+                                                    Notifications
+                                                </p>
+                                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                    New messages will appear here
+                                                </p>
+                                            </div>
+
+                                            <div className="max-h-80 overflow-y-auto">
+                                                {notifications?.length ? (
+                                                    notifications.slice(0, 10).map((n) => (
+                                                        <Link
+                                                            key={n.id}
+                                                            to={`/chat?chatId=${n.chatGroupId}`}
+                                                            onClick={() => setNotifOpen(false)}
+                                                            className="block px-4 py-3 hover:bg-surface-alt dark:hover:bg-surface-dark transition-colors"
+                                                        >
+                                                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                                {n.senderName}
+                                                            </p>
+                                                            <p className="text-sm text-text-primary dark:text-text-dark line-clamp-2">
+                                                                {n.content}
+                                                            </p>
+                                                            <p className="text-[10px] text-text-secondary/60 mt-1">
+                                                                {n.createdAt
+                                                                    ? new Date(n.createdAt).toLocaleString()
+                                                                    : ''}
+                                                            </p>
+                                                        </Link>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-4 py-8 text-center">
+                                                        <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                                                            No notifications yet
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        )}
+
                         {/* Profile dropdown (only when authenticated) */}
                         {isAuthenticated && (
                             <div className="relative">
                                 <button
                                     onClick={() => {
                                         setProfileOpen(!profileOpen);
-                                        setNotificationOpen(false);
+                                        setNotifOpen(false);
                                     }}
                                     className="flex items-center gap-2 p-1 rounded-xl
                     hover:bg-surface-alt dark:hover:bg-surface-dark-alt

@@ -18,14 +18,11 @@ export const SocketProvider = ({ children }) => {
     const { user, isAuthenticated } = useAuth();
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [connected, setConnected] = useState(false);
-    const [notifications, setNotifications] = useState([]);
+    const [socket, setSocket] = useState(null);
     const [activeChatGroupId, setActiveChatGroupId] = useState(null);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const socketRef = useRef(null);
-    const activeChatGroupRef = useRef(null);
-
-    useEffect(() => {
-        activeChatGroupRef.current = activeChatGroupId;
-    }, [activeChatGroupId]);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -34,8 +31,10 @@ export const SocketProvider = ({ children }) => {
                 socketRef.current = null;
                 setConnected(false);
             }
-            setNotifications([]);
+            setSocket(null);
             setActiveChatGroupId(null);
+            setNotifications([]);
+            setUnreadCount(0);
             return;
         }
 
@@ -51,6 +50,7 @@ export const SocketProvider = ({ children }) => {
         });
 
         socketRef.current = socket;
+        setSocket(socket);
 
         socket.on('connect', () => {
             setConnected(true);
@@ -71,93 +71,118 @@ export const SocketProvider = ({ children }) => {
             setOnlineUsers((prev) => prev.filter((id) => id !== userId));
         });
 
-        socket.on('newChatGroupMessage', (message) => {
-            const senderId =
-                typeof message?.sender === 'string'
-                    ? message.sender
-                    : message?.sender?._id;
-
-            // Do not notify for own messages.
-            if (!senderId || senderId === user?._id) return;
-
-            // Do not create bell notification while user is inside that exact chat.
-            if (activeChatGroupRef.current && message?.chatGroup === activeChatGroupRef.current) return;
-
-            const senderName =
-                typeof message?.sender === 'string'
-                    ? 'Friend'
-                    : message?.sender?.name || 'Friend';
-
-            setNotifications((prev) => [
-                {
-                    id: message?._id || `${Date.now()}-${Math.random()}`,
-                    chatGroupId: message?.chatGroup,
-                    senderName,
-                    content: message?.content || 'Sent you a new message',
-                    createdAt: message?.createdAt || new Date().toISOString(),
-                    read: false,
-                },
-                ...prev,
-            ]);
-        });
-
         // Heartbeat response
         socket.on('ping', () => {
             socket.emit('pong');
         });
 
         return () => {
-            socket.off('newChatGroupMessage');
             socket.disconnect();
             socketRef.current = null;
             setConnected(false);
+            setSocket(null);
         };
-    }, [isAuthenticated, user?._id]);
+    }, [isAuthenticated]);
+
+    useEffect(() => {
+        if (!socket || !isAuthenticated) return;
+
+        const handleNewChatGroupMessage = (msg) => {
+            const senderId = typeof msg?.sender === 'string' ? msg.sender : msg?.sender?._id;
+            if (!msg?.chatGroup) return;
+
+            // Ignore my own messages
+            if (senderId && user?._id && senderId === user._id) return;
+
+            // If user is currently viewing that chat group, don't treat it as a notification
+            const msgChatGroupId = typeof msg.chatGroup === 'string' ? msg.chatGroup : msg.chatGroup?._id;
+            if (activeChatGroupId && msgChatGroupId === activeChatGroupId) return;
+
+            const senderName =
+                typeof msg?.sender === 'string'
+                    ? 'User'
+                    : msg?.sender?.name || msg?.sender?.fullName || 'User';
+
+            const item = {
+                id: msg?._id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                type: 'chat',
+                chatGroupId: msgChatGroupId,
+                senderId: senderId || null,
+                senderName,
+                content: msg?.content || '',
+                createdAt: msg?.createdAt || new Date().toISOString(),
+            };
+
+            setNotifications((prev) => [item, ...prev].slice(0, 25));
+            setUnreadCount((c) => c + 1);
+        };
+
+        socket.on('newChatGroupMessage', handleNewChatGroupMessage);
+
+        return () => {
+            socket.off('newChatGroupMessage', handleNewChatGroupMessage);
+        };
+    }, [activeChatGroupId, isAuthenticated, socket, user?._id]);
 
     const joinRoom = useCallback((groupId) => {
-        socketRef.current?.emit('joinRoom', groupId);
-    }, []);
+        socket?.emit('joinRoom', groupId);
+    }, [socket]);
 
     const leaveRoom = useCallback((groupId) => {
-        socketRef.current?.emit('leaveRoom', groupId);
-    }, []);
+        socket?.emit('leaveRoom', groupId);
+    }, [socket]);
 
     const sendMessage = useCallback((groupId, content) => {
-        socketRef.current?.emit('sendMessage', { groupId, content });
-    }, []);
+        socket?.emit('sendMessage', { groupId, content });
+    }, [socket]);
 
     const joinChatGroup = useCallback((chatGroupId) => {
-        socketRef.current?.emit('joinChatGroup', chatGroupId);
-    }, []);
+        socket?.emit('joinChatGroup', chatGroupId);
+    }, [socket]);
 
     const leaveChatGroup = useCallback((chatGroupId) => {
-        socketRef.current?.emit('leaveChatGroup', chatGroupId);
-    }, []);
+        socket?.emit('leaveChatGroup', chatGroupId);
+    }, [socket]);
 
     const sendChatGroupMessage = useCallback((chatGroupId, content) => {
-        socketRef.current?.emit('sendChatGroupMessage', { chatGroupId, content });
-    }, []);
+        socket?.emit('sendChatGroupMessage', { chatGroupId, content });
+    }, [socket]);
 
-    const emitTyping = useCallback((groupId) => {
-        socketRef.current?.emit('typing', { groupId });
-    }, []);
-
-    const emitStopTyping = useCallback((groupId) => {
-        socketRef.current?.emit('stopTyping', { groupId });
+    const clearNotifications = useCallback(() => {
+        setNotifications([]);
+        setUnreadCount(0);
     }, []);
 
     const markAllNotificationsRead = useCallback(() => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+        setUnreadCount(0);
     }, []);
 
-    const removeNotification = useCallback((notificationId) => {
-        setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+    const clearChatNotifications = useCallback((chatGroupId) => {
+        if (!chatGroupId) return;
+        setNotifications((prev) => prev.filter((n) => n.chatGroupId !== chatGroupId));
+        // We don't have per-item read tracking yet; safest is to zero unread when user opens a chat.
+        setUnreadCount(0);
     }, []);
+
+    const emitTyping = useCallback((groupId) => {
+        socket?.emit('typing', { groupId });
+    }, [socket]);
+
+    const emitStopTyping = useCallback((groupId) => {
+        socket?.emit('stopTyping', { groupId });
+    }, [socket]);
 
     const value = {
-        socket: socketRef.current,
+        socket,
         connected,
         onlineUsers,
+        activeChatGroupId,
+        setActiveChatGroupId,
+        notifications,
+        unreadCount,
+        clearNotifications,
+        markAllNotificationsRead,
+        clearChatNotifications,
         joinRoom,
         leaveRoom,
         sendMessage,
@@ -166,12 +191,6 @@ export const SocketProvider = ({ children }) => {
         sendChatGroupMessage,
         emitTyping,
         emitStopTyping,
-        notifications,
-        unreadNotificationCount: notifications.filter((n) => !n.read).length,
-        markAllNotificationsRead,
-        removeNotification,
-        activeChatGroupId,
-        setActiveChatGroupId,
     };
 
     return (

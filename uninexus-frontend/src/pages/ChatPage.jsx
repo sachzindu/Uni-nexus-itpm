@@ -21,6 +21,7 @@ const ChatPage = () => {
         leaveChatGroup,
         sendChatGroupMessage,
         setActiveChatGroupId,
+        clearChatNotifications,
     } = useSocket();
     const toast = useToast();
 
@@ -120,7 +121,8 @@ const ChatPage = () => {
         }
 
         setSelectedChat(chat);
-        setActiveChatGroupId(chat._id);
+        setActiveChatGroupId?.(chat._id);
+        clearChatNotifications?.(chat._id);
         setShowSidebar(false);
         setMsgLoading(true);
         setMessages([]);
@@ -142,9 +144,10 @@ const ChatPage = () => {
 
     useEffect(() => {
         return () => {
-            setActiveChatGroupId(null);
+            // When leaving the chat page, stop suppressing notifications
+            setActiveChatGroupId?.(null);
         };
-    }, [setActiveChatGroupId]);
+    }, []);
 
     const handleSend = (e) => {
         e.preventDefault();
