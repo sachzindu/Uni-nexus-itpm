@@ -104,14 +104,18 @@ const GroupDetailPage = () => {
         }
     };
 
-    const handleJoinRequest = async (requestId, status) => {
+    const handleSendMessage = async (e) => {
+        e.preventDefault();
+        if (!newMessageText.trim() || sending) return;
+
+        setSending(true);
         try {
-            await groupAPI.handleJoinRequest(id, requestId, { status });
-            const grpRes = await groupAPI.getById(id);
-            setGroup(grpRes.data?.group || grpRes.data);
-            toast.success(`Request ${status}`);
+            await sendMessage(id, newMessageText.trim());
+            setNewMessageText('');
         } catch (err) {
-            toast.error(err.message || 'Failed to handle request');
+            toast.error('Failed to send message');
+        } finally {
+            setSending(false);
         }
     };
 

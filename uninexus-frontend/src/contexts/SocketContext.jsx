@@ -20,8 +20,6 @@ export const SocketProvider = ({ children }) => {
     const [connected, setConnected] = useState(false);
     const [socket, setSocket] = useState(null);
     const [activeChatGroupId, setActiveChatGroupId] = useState(null);
-    const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
     const socketRef = useRef(null);
 
     useEffect(() => {
@@ -32,9 +30,6 @@ export const SocketProvider = ({ children }) => {
                 setConnected(false);
             }
             setSocket(null);
-            setActiveChatGroupId(null);
-            setNotifications([]);
-            setUnreadCount(0);
             return;
         }
 
@@ -84,46 +79,6 @@ export const SocketProvider = ({ children }) => {
         };
     }, [isAuthenticated]);
 
-    useEffect(() => {
-        if (!socket || !isAuthenticated) return;
-
-        const handleNewChatGroupMessage = (msg) => {
-            const senderId = typeof msg?.sender === 'string' ? msg.sender : msg?.sender?._id;
-            if (!msg?.chatGroup) return;
-
-            // Ignore my own messages
-            if (senderId && user?._id && senderId === user._id) return;
-
-            // If user is currently viewing that chat group, don't treat it as a notification
-            const msgChatGroupId = typeof msg.chatGroup === 'string' ? msg.chatGroup : msg.chatGroup?._id;
-            if (activeChatGroupId && msgChatGroupId === activeChatGroupId) return;
-
-            const senderName =
-                typeof msg?.sender === 'string'
-                    ? 'User'
-                    : msg?.sender?.name || msg?.sender?.fullName || 'User';
-
-            const item = {
-                id: msg?._id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                type: 'chat',
-                chatGroupId: msgChatGroupId,
-                senderId: senderId || null,
-                senderName,
-                content: msg?.content || '',
-                createdAt: msg?.createdAt || new Date().toISOString(),
-            };
-
-            setNotifications((prev) => [item, ...prev].slice(0, 25));
-            setUnreadCount((c) => c + 1);
-        };
-
-        socket.on('newChatGroupMessage', handleNewChatGroupMessage);
-
-        return () => {
-            socket.off('newChatGroupMessage', handleNewChatGroupMessage);
-        };
-    }, [activeChatGroupId, isAuthenticated, socket, user?._id]);
-
     const joinRoom = useCallback((groupId) => {
         socket?.emit('joinRoom', groupId);
     }, [socket]);
@@ -148,22 +103,6 @@ export const SocketProvider = ({ children }) => {
         socket?.emit('sendChatGroupMessage', { chatGroupId, content });
     }, [socket]);
 
-    const clearNotifications = useCallback(() => {
-        setNotifications([]);
-        setUnreadCount(0);
-    }, []);
-
-    const markAllNotificationsRead = useCallback(() => {
-        setUnreadCount(0);
-    }, []);
-
-    const clearChatNotifications = useCallback((chatGroupId) => {
-        if (!chatGroupId) return;
-        setNotifications((prev) => prev.filter((n) => n.chatGroupId !== chatGroupId));
-        // We don't have per-item read tracking yet; safest is to zero unread when user opens a chat.
-        setUnreadCount(0);
-    }, []);
-
     const emitTyping = useCallback((groupId) => {
         socket?.emit('typing', { groupId });
     }, [socket]);
@@ -178,11 +117,6 @@ export const SocketProvider = ({ children }) => {
         onlineUsers,
         activeChatGroupId,
         setActiveChatGroupId,
-        notifications,
-        unreadCount,
-        clearNotifications,
-        markAllNotificationsRead,
-        clearChatNotifications,
         joinRoom,
         leaveRoom,
         sendMessage,
