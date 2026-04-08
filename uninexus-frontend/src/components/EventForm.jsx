@@ -16,14 +16,29 @@ const validateForm = (formData) => {
     }
 
     // Event date: required, must be in the future
+    // if (!formData.eventDate) {
+    //     newErrors.eventDate = 'Event date & time is required';
+    // } else {
+    //     const d = new Date(formData.eventDate);
+    //     if (Number.isNaN(d.getTime())) {
+    //         newErrors.eventDate = 'Enter a valid date';
+    //     } else if (d <= new Date()) {
+    //         newErrors.eventDate = 'Must be a future date & time';
+    //     }
+    // }
+
     if (!formData.eventDate) {
         newErrors.eventDate = 'Event date & time is required';
     } else {
         const d = new Date(formData.eventDate);
         if (Number.isNaN(d.getTime())) {
             newErrors.eventDate = 'Enter a valid date';
-        } else if (d <= new Date()) {
-            newErrors.eventDate = 'Must be a future date & time';
+        } else {
+            const status = (formData.status || '').toLowerCase();
+            const allowPast = status === 'completed' || status === 'canceled';
+            if (!allowPast && d <= new Date()) {
+                newErrors.eventDate = 'Must be a future date & time';
+            }
         }
     }
 
