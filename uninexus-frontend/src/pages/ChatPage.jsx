@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    Send, Smile, Search, MessageCircle, Users, Circle, Hash,
-    ArrowLeft,
+    Send, Smile, Search, MessageCircle, Hash,
+    ArrowLeft, Paperclip, FileText,
 } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
-import { chatGroupAPI, chatAPI } from '../services/api';
+import { chatGroupAPI, chatAPI, getUploadUrl } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import { Skeleton } from '../components/ui/Loader';
@@ -35,11 +35,13 @@ const ChatPage = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showSidebar, setShowSidebar] = useState(true);
     const [typingUsers, setTypingUsers] = useState([]);
+    const [uploadingPdf, setUploadingPdf] = useState(false);
 
     const [searchParams, setSearchParams] = useSearchParams();
 
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
+    const pdfInputRef = useRef(null);
 
     // Fetch chat groups
     useEffect(() => {
@@ -77,7 +79,10 @@ const ChatPage = () => {
         };
 
         const handleNewMessage = (msg) => {
-            setMessages((prev) => [...prev, msg]);
+            setMessages((prev) => {
+                if (msg._id && prev.some((m) => m._id === msg._id)) return prev;
+                return [...prev, msg];
+            });
         };
 
         const handleTyping = ({ userId, userName }) => {
@@ -144,10 +149,9 @@ const ChatPage = () => {
 
     useEffect(() => {
         return () => {
-            // When leaving the chat page, stop suppressing notifications
             setActiveChatGroupId?.(null);
         };
-    }, []);
+    }, [setActiveChatGroupId]);
 
     const handleSend = (e) => {
         e.preventDefault();
@@ -162,6 +166,31 @@ const ChatPage = () => {
     const onEmojiClick = (emojiObj) => {
         setNewMessage((prev) => prev + emojiObj.emoji);
         inputRef.current?.focus();
+    };
+
+    const handlePdfChange = async (e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !selectedChat) return;
+        if (file.type !== 'application/pdf') {
+            toast.error('Please choose a PDF file.');
+            return;
+        }
+        setUploadingPdf(true);
+        try {
+            const res = await chatAPI.uploadChatGroupPdf(selectedChat._id, file);
+            const msg = res?.data?.message;
+            if (msg) {
+                setMessages((prev) => {
+                    if (msg._id && prev.some((m) => m._id === msg._id)) return prev;
+                    return [...prev, msg];
+                });
+            }
+        } catch (err) {
+            toast.error(err?.message || 'Failed to upload PDF');
+        } finally {
+            setUploadingPdf(false);
+        }
     };
 
     const getChatName = (chat) => {
@@ -338,7 +367,21 @@ const ChatPage = () => {
                                                         : 'bg-white dark:bg-surface-dark-alt text-text-primary dark:text-text-dark rounded-bl-md'
                                                         }`}
                                                 >
-                                                    {msg.content}
+                                                    {msg.type === 'file' && msg.fileUrl ? (
+                                                        <a
+                                                            href={getUploadUrl(msg.fileUrl)}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className={`flex items-start gap-2 underline break-all ${isMine ? 'text-white' : 'text-accent-purple'
+                                                                }`}
+                                                            onClick={(ev) => ev.stopPropagation()}
+                                                        >
+                                                            <FileText size={16} className="shrink-0 mt-0.5" />
+                                                            <span>{msg.fileName || msg.content || 'PDF'}</span>
+                                                        </a>
+                                                    ) : (
+                                                        msg.content
+                                                    )}
                                                 </div>
                                                 <p className={`text-[9px] text-text-secondary/60 mt-0.5 ${isMine ? 'text-right' : 'text-left'
                                                     } px-3`}>
@@ -378,7 +421,23 @@ const ChatPage = () => {
                                     />
                                 </div>
                             )}
+                            <input
+                                ref={pdfInputRef}
+                                type="file"
+                                accept="application/pdf,.pdf"
+                                className="hidden"
+                                onChange={handlePdfChange}
+                            />
                             <form onSubmit={handleSend} className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => pdfInputRef.current?.click()}
+                                    disabled={uploadingPdf || !selectedChat}
+                                    className="text-text-secondary hover:text-accent-purple transition-colors cursor-pointer disabled:opacity-40"
+                                    title="Send PDF"
+                                >
+                                    <Paperclip size={20} />
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setShowEmoji(!showEmoji)}
@@ -400,13 +459,18 @@ const ChatPage = () => {
                                 <motion.button
                                     whileTap={{ scale: 0.9 }}
                                     type="submit"
-                                    disabled={!newMessage.trim()}
+                                    disabled={!newMessage.trim() || uploadingPdf}
                                     className="w-9 h-9 rounded-xl gradient-bg flex items-center justify-center
                     text-white disabled:opacity-50 cursor-pointer"
                                 >
                                     <Send size={16} />
                                 </motion.button>
                             </form>
+                            {uploadingPdf && (
+                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-1 px-1">
+                                    Uploading PDF…
+                                </p>
+                            )}
                         </div>
                     </>
                 ) : (

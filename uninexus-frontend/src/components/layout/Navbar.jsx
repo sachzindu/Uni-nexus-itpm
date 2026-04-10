@@ -9,6 +9,7 @@ import {
     Search,
     Sun,
     Moon,
+    Bell,
     Menu,
     X,
     ChevronDown,
@@ -32,10 +33,12 @@ const navLinks = [
 const Navbar = () => {
     const { user, isAuthenticated, logout } = useAuth();
     const { darkMode, toggleDarkMode } = useTheme();
+    const { unreadCount, notifications, markAllNotificationsRead } = useSocket();
     const location = useLocation();
     const navigate = useNavigate();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [profileOpen, setProfileOpen] = useState(false);
+    const [notifOpen, setNotifOpen] = useState(false);
 
     const handleLogout = async () => {
         await logout();
@@ -97,6 +100,92 @@ const Navbar = () => {
                         >
                             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
                         </motion.button>
+
+                        {/* Message notifications — between theme toggle and profile */}
+                        {isAuthenticated && (
+                            <div className="relative">
+                                <motion.button
+                                    whileTap={{ scale: 0.9 }}
+                                    type="button"
+                                    onClick={() => {
+                                        setNotifOpen((o) => {
+                                            const next = !o;
+                                            if (!o && next) {
+                                                markAllNotificationsRead?.();
+                                            }
+                                            return next;
+                                        });
+                                        setProfileOpen(false);
+                                    }}
+                                    className="relative p-2 rounded-xl hover:bg-surface-alt dark:hover:bg-surface-dark-alt
+                text-text-secondary dark:text-text-dark-secondary transition-colors cursor-pointer"
+                                    aria-label="Notifications"
+                                >
+                                    <Bell size={20} />
+                                    {unreadCount > 0 && (
+                                        <span
+                                            className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1
+                      rounded-full bg-error text-white text-[10px] font-bold
+                      flex items-center justify-center"
+                                        >
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </span>
+                                    )}
+                                </motion.button>
+
+                                <AnimatePresence>
+                                    {notifOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                                            className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden
+                        bg-white dark:bg-surface-dark-alt rounded-2xl card-shadow
+                        border border-border dark:border-border-dark z-[60]"
+                                        >
+                                            <div className="px-4 py-3 border-b border-border dark:border-border-dark">
+                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
+                                                    Messages
+                                                </p>
+                                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                    New messages from your chats
+                                                </p>
+                                            </div>
+                                            <div className="max-h-80 overflow-y-auto">
+                                                {notifications?.length ? (
+                                                    notifications.slice(0, 10).map((n) => (
+                                                        <Link
+                                                            key={n.id}
+                                                            to={`/chat?chatId=${n.chatGroupId}`}
+                                                            onClick={() => setNotifOpen(false)}
+                                                            className="block px-4 py-3 hover:bg-surface-alt dark:hover:bg-surface-dark transition-colors"
+                                                        >
+                                                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                                {n.senderName}
+                                                            </p>
+                                                            <p className="text-sm text-text-primary dark:text-text-dark line-clamp-2">
+                                                                {n.content}
+                                                            </p>
+                                                            <p className="text-[10px] text-text-secondary/60 mt-1">
+                                                                {n.createdAt
+                                                                    ? new Date(n.createdAt).toLocaleString()
+                                                                    : ''}
+                                                            </p>
+                                                        </Link>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-4 py-8 text-center">
+                                                        <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                                                            No new messages
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        )}
 
                         {/* Profile dropdown (only when authenticated) */}
                         {isAuthenticated && (

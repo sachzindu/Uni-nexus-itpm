@@ -24,8 +24,16 @@ const messageSchema = new mongoose.Schema(
         },
         type: {
             type: String,
-            enum: ['text', 'system'],
+            enum: ['text', 'system', 'file'],
             default: 'text',
+        },
+        fileUrl: {
+            type: String,
+            default: null,
+        },
+        fileName: {
+            type: String,
+            default: null,
         },
         readBy: [
             {

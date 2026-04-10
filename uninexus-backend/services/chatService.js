@@ -30,7 +30,7 @@ const saveMessage = async (messageData) => {
  * @returns {Promise<object>} Saved message document
  */
 const saveChatGroupMessage = async (messageData) => {
-    const { sender, chatGroup, content, type = 'text' } = messageData;
+    const { sender, chatGroup, content, type = 'text', fileUrl = null, fileName = null } = messageData;
 
     // Verify chat group exists and sender is a member
     const chatGroupDoc = await ChatGroup.findById(chatGroup);
@@ -40,7 +40,18 @@ const saveChatGroupMessage = async (messageData) => {
         throw createError(403, 'You are not a member of this chat group.');
     }
 
-    const message = await Message.create({ sender, chatGroup, content, type });
+    if (type === 'file' && !fileUrl) {
+        throw createError(400, 'File URL is required for file messages.');
+    }
+
+    const message = await Message.create({
+        sender,
+        chatGroup,
+        content,
+        type,
+        fileUrl: type === 'file' ? fileUrl : null,
+        fileName: type === 'file' ? fileName : null,
+    });
 
     // Update lastMessage denormalization for chat list ordering
     chatGroupDoc.lastMessage = message._id;
