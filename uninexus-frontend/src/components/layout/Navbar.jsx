@@ -148,18 +148,25 @@ const Navbar = () => {
                                                     Messages
                                                 </p>
                                                 <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                                                    New messages from your chats
+                                                    Chats and group messages
                                                 </p>
                                             </div>
                                             <div className="max-h-80 overflow-y-auto">
                                                 {notifications?.length ? (
                                                     notifications.slice(0, 10).map((n) => (
                                                         <Link
-                                                            key={n.id}
-                                                            to={`/chat?chatId=${n.chatGroupId}`}
+                                                            key={`${n.place}-${n.id}`}
+                                                            to={
+                                                                n.groupId
+                                                                    ? `/groups/${n.groupId}?tab=messages`
+                                                                    : `/chat?chatId=${n.chatGroupId}`
+                                                            }
                                                             onClick={() => setNotifOpen(false)}
                                                             className="block px-4 py-3 hover:bg-surface-alt dark:hover:bg-surface-dark transition-colors"
                                                         >
+                                                            <p className="text-[10px] uppercase tracking-wide text-accent-purple/80 mb-0.5">
+                                                                {n.place === 'group' ? 'Group' : 'Chat'}
+                                                            </p>
                                                             <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
                                                                 {n.senderName}
                                                             </p>

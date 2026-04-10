@@ -22,6 +22,7 @@ export const SocketProvider = ({ children }) => {
     const [connected, setConnected] = useState(false);
     const [socket, setSocket] = useState(null);
     const [activeChatGroupId, setActiveChatGroupId] = useState(null);
+    const [activeGroupId, setActiveGroupId] = useState(null);
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const socketRef = useRef(null);
@@ -35,6 +36,7 @@ export const SocketProvider = ({ children }) => {
             }
             setSocket(null);
             setActiveChatGroupId(null);
+            setActiveGroupId(null);
             setNotifications([]);
             setUnreadCount(0);
             return;
@@ -110,7 +112,7 @@ export const SocketProvider = ({ children }) => {
 
             const item = {
                 id: msg?._id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-                type: 'chat',
+                place: 'chat',
                 chatGroupId: msgChatGroupId,
                 senderId,
                 senderName,
@@ -122,12 +124,47 @@ export const SocketProvider = ({ children }) => {
             setUnreadCount((c) => c + 1);
         };
 
+        const handleNewGroupMessage = (msg) => {
+            const senderId = typeof msg?.sender === 'string' ? msg.sender : msg?.sender?._id;
+            if (!msg?.group) return;
+
+            if (senderId && user?._id && senderId === user._id) return;
+
+            const msgGroupId = typeof msg.group === 'string' ? msg.group : msg.group?._id;
+            if (activeGroupId && msgGroupId === activeGroupId) return;
+
+            const senderName =
+                typeof msg?.sender === 'string'
+                    ? 'User'
+                    : msg?.sender?.name || msg?.sender?.fullName || 'User';
+
+            const preview =
+                msg.type === 'file'
+                    ? msg.fileName || 'PDF'
+                    : (msg.content || '').slice(0, 120);
+
+            const item = {
+                id: msg?._id || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                place: 'group',
+                groupId: msgGroupId,
+                senderId,
+                senderName,
+                content: preview,
+                createdAt: msg?.createdAt || new Date().toISOString(),
+            };
+
+            setNotifications((prev) => [item, ...prev].slice(0, 25));
+            setUnreadCount((c) => c + 1);
+        };
+
         socket.on('newChatGroupMessage', handleNewChatGroupMessage);
+        socket.on('newMessage', handleNewGroupMessage);
 
         return () => {
             socket.off('newChatGroupMessage', handleNewChatGroupMessage);
+            socket.off('newMessage', handleNewGroupMessage);
         };
-    }, [activeChatGroupId, isAuthenticated, socket, user?._id]);
+    }, [activeChatGroupId, activeGroupId, isAuthenticated, socket, user?._id]);
 
     const joinRoom = useCallback(
         (groupId) => {
@@ -182,7 +219,17 @@ export const SocketProvider = ({ children }) => {
 
     const clearChatNotifications = useCallback((chatGroupId) => {
         if (!chatGroupId) return;
-        setNotifications((prev) => prev.filter((n) => n.chatGroupId !== chatGroupId));
+        setNotifications((prev) =>
+            prev.filter((n) => !(n.place === 'chat' && n.chatGroupId === chatGroupId))
+        );
+        setUnreadCount(0);
+    }, []);
+
+    const clearGroupNotifications = useCallback((groupId) => {
+        if (!groupId) return;
+        setNotifications((prev) =>
+            prev.filter((n) => !(n.place === 'group' && n.groupId === groupId))
+        );
         setUnreadCount(0);
     }, []);
 
@@ -206,11 +253,14 @@ export const SocketProvider = ({ children }) => {
         onlineUsers,
         activeChatGroupId,
         setActiveChatGroupId,
+        activeGroupId,
+        setActiveGroupId,
         notifications,
         unreadCount,
         clearNotifications,
         markAllNotificationsRead,
         clearChatNotifications,
+        clearGroupNotifications,
         joinRoom,
         leaveRoom,
         sendMessage,
