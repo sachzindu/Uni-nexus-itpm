@@ -180,6 +180,24 @@ const removeMember = async (req, res, next) => {
     }
 };
 
+/**
+ * @desc    Promote a member to admin
+ * @route   POST /api/groups/:groupId/members/:memberId/promote
+ * @access  Private (Group Admin)
+ */
+const promoteMember = async (req, res, next) => {
+    try {
+        const group = await groupService.promoteMember(
+            req.params.groupId,
+            req.params.memberId,
+            req.user._id
+        );
+        res.status(200).json({ success: true, message: 'Member promoted to admin', data: { group } });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createGroup,
     getGroups,
@@ -191,4 +209,5 @@ module.exports = {
     leaveGroup,
     getMembers,
     removeMember,
+    promoteMember,
 };

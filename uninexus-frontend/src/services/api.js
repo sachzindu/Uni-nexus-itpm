@@ -106,6 +106,7 @@ export const groupAPI = {
     leave: (id) => api.post(`/groups/${id}/leave`),
     getMembers: (id) => api.get(`/groups/${id}/members`),
     removeMember: (groupId, memberId) => api.delete(`/groups/${groupId}/members/${memberId}`),
+    promoteMember: (groupId, memberId) => api.post(`/groups/${groupId}/members/${memberId}/promote`),
 };
 
 // ─── Post API ────────────────────────────────────────────────
@@ -119,6 +120,10 @@ export const postAPI = {
         api.put(`/groups/${groupId}/posts/${postId}`, data),
     delete: (groupId, postId) =>
         api.delete(`/groups/${groupId}/posts/${postId}`),
+    uploadImage: (groupId, formData) =>
+        api.post(`/groups/${groupId}/posts/upload-image`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }),
     toggleUpvote: (groupId, postId) =>
         api.post(`/groups/${groupId}/posts/${postId}/upvote`),
     toggleDownvote: (groupId, postId) =>
@@ -129,6 +134,8 @@ export const postAPI = {
         api.get(`/groups/${groupId}/posts/${postId}/comments`, { params }),
     deleteComment: (groupId, postId, commentId) =>
         api.delete(`/groups/${groupId}/posts/${postId}/comments/${commentId}`),
+    updateComment: (groupId, postId, commentId, data) =>
+        api.put(`/groups/${groupId}/posts/${postId}/comments/${commentId}`, data),
 };
 
 export const eventAPI = {

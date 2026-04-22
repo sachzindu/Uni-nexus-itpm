@@ -37,6 +37,9 @@ router.post('/:id/leave', leaveGroup);
 router.get('/:id/members', getMembers);
 
 // Remove a member (admin only)
-router.delete('/:groupId/members/:memberId', require('../middleware/authMiddleware').protect, require('../controllers/groupController').removeMember);
+router.delete('/:groupId/members/:memberId', require('../controllers/groupController').removeMember);
+
+// Promote a member to admin
+router.post('/:groupId/members/:memberId/promote', require('../controllers/groupController').promoteMember);
 
 module.exports = router;
