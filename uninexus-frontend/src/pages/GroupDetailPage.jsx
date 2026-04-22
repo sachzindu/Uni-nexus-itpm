@@ -31,6 +31,8 @@ const GroupDetailPage = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
     const [editForm, setEditForm] = useState({ name: '', description: '', tags: '' });
+    const [postPagination, setPostPagination] = useState({ page: 1, pages: 1, total: 0 });
+    const [loadingMorePosts, setLoadingMorePosts] = useState(false);
 
     // Open edit modal and populate form
     const openEditModal = () => {
@@ -95,10 +97,11 @@ const GroupDetailPage = () => {
             try {
                 const [grpRes, postRes] = await Promise.all([
                     groupAPI.getById(id),
-                    postAPI.getByGroup(id),
+                    postAPI.getByGroup(id, { page: 1, limit: 10 }),
                 ]);
                 setGroup(grpRes.data?.group || grpRes.data);
                 setPosts(postRes.data?.posts || postRes.data || []);
+                setPostPagination(postRes.data?.pagination || { page: 1, pages: 1, total: 0 });
             } catch (err) {
                 toast.error('Failed to load group');
                 navigate('/groups');
@@ -111,6 +114,22 @@ const GroupDetailPage = () => {
 
     const handlePost = () => {
         navigate(`/groups/${id}/create-post`);
+    };
+
+    const handleLoadMorePosts = async () => {
+        if (postPagination.page >= postPagination.pages) return;
+        setLoadingMorePosts(true);
+        try {
+            const nextPage = postPagination.page + 1;
+            const res = await postAPI.getByGroup(id, { page: nextPage, limit: 10 });
+            const morePosts = res.data?.posts || [];
+            setPosts((prev) => [...prev, ...morePosts]);
+            setPostPagination(res.data?.pagination || postPagination);
+        } catch {
+            toast.error('Failed to load more posts');
+        } finally {
+            setLoadingMorePosts(false);
+        }
     };
 
     const handleUpvote = async (postId) => {
@@ -267,36 +286,6 @@ const GroupDetailPage = () => {
                             </Button>
                         )}
                     </div>
-                    {/* Edit Group Modal */}
-                    <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
-                        <form onSubmit={handleEditSubmit} className="space-y-4">
-                            <Input
-                                label="Group Name"
-                                name="name"
-                                value={editForm.name}
-                                onChange={handleEditChange}
-                                required
-                            />
-                            <Input
-                                label="Description"
-                                name="description"
-                                value={editForm.description}
-                                onChange={handleEditChange}
-                                as="textarea"
-                                rows={3}
-                            />
-                            <Input
-                                label="Tags (comma separated)"
-                                name="tags"
-                                value={editForm.tags}
-                                onChange={handleEditChange}
-                            />
-                            <div className="flex justify-end gap-2">
-                                <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
-                                <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
-                            </div>
-                        </form>
-                    </Modal>
                 </div>
 
                 {/* Stats */}
@@ -519,6 +508,21 @@ const GroupDetailPage = () => {
                             <p className="text-text-secondary dark:text-text-dark-secondary">No posts yet. Be the first to share!</p>
                         </Card>
                     )}
+
+                    {/* Load More Posts */}
+                    {postPagination.page < postPagination.pages && (
+                        <div className="flex justify-center pt-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleLoadMorePosts}
+                                loading={loadingMorePosts}
+                            >
+                                <MessageCircle size={14} />
+                                Load More Posts
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -536,6 +540,7 @@ const GroupDetailPage = () => {
                             (a) => (typeof a === 'string' ? a : a._id) === m._id
                         );
                         const canRemove = isAdmin && !memberIsAdmin && m._id !== user?._id;
+                        const canPromote = isAdmin && !memberIsAdmin && m._id !== user?._id;
                         return (
                             <Card key={m._id} hover={false} className="flex items-center gap-3 !p-4">
                                 <UserAvatar user={m} size="sm" />
@@ -550,6 +555,25 @@ const GroupDetailPage = () => {
                                     )}
                                 </div>
                                 {memberIsAdmin && <Badge variant="purple" className="text-[10px]">Admin</Badge>}
+                                {canPromote && (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={async () => {
+                                            if (!window.confirm(`Promote ${m.name || 'this user'} to admin?`)) return;
+                                            try {
+                                                await groupAPI.promoteMember(id, m._id);
+                                                const grpRes = await groupAPI.getById(id);
+                                                setGroup(grpRes.data?.group || grpRes.data);
+                                                toast.success(`${m.name || 'Member'} promoted to admin`);
+                                            } catch (err) {
+                                                toast.error(err.message || 'Failed to promote member');
+                                            }
+                                        }}
+                                    >
+                                        Promote
+                                    </Button>
+                                )}
                                 {canRemove && (
                                     <Button
                                         variant="danger"
@@ -582,12 +606,13 @@ const GroupDetailPage = () => {
                         pendingRequests.map((req) => (
                             <Card key={req._id} hover={false} className="flex items-center justify-between !p-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-surface-alt dark:bg-surface-dark flex items-center justify-center">
-                                        <UserPlus size={18} className="text-text-secondary" />
-                                    </div>
+                                    <UserAvatar user={req.user} size="sm" />
                                     <div>
                                         <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                            User {req.user?.toString?.()?.slice(-6) || 'Unknown'}
+                                            {req.user?.name || 'Unknown User'}
+                                        </p>
+                                        <p className="text-xs text-text-secondary">
+                                            {req.user?.email || ''}
                                         </p>
                                         <p className="text-xs text-text-secondary">
                                             Requested {new Date(req.requestedAt).toLocaleDateString()}

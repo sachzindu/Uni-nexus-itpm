@@ -270,6 +270,25 @@ const getComments = async (postId, query = {}) => {
     };
 };
 
+/**
+ * Update a comment. Only the comment author can edit their own comment.
+ */
+const updateComment = async (postId, commentId, userId, content) => {
+    const post = await Post.findById(postId).populate('comments.user', 'name email avatar');
+    if (!post) throw createError(404, 'Post not found.');
+    const comment = post.comments.id(commentId);
+    if (!comment) throw createError(404, 'Comment not found.');
+
+    if (!comment.user.equals(userId)) {
+        throw createError(403, 'Only the comment author can edit this comment.');
+    }
+
+    comment.content = content.trim();
+    await post.save();
+    logger.info(`Comment ${commentId} updated on post ${postId} by user ${userId}`);
+    return comment;
+};
+
 module.exports = {
     createPost,
     getPostsByGroup,
@@ -281,4 +300,5 @@ module.exports = {
     addComment,
     getComments,
     deleteComment,
+    updateComment,
 };

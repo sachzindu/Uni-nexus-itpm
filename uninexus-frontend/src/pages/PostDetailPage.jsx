@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle, Send, Clock, X,
+    ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle, Send, Clock, X, Pencil, Check,
 } from 'lucide-react';
 import { postAPI, groupAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,6 +28,8 @@ const PostDetailPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [commentPagination, setCommentPagination] = useState({ page: 1, pages: 1, total: 0 });
     const [loadingMore, setLoadingMore] = useState(false);
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editText, setEditText] = useState('');
 
     // Determine if the current user is a member of this group
     const isMember = group?.members?.some(
@@ -351,6 +353,7 @@ const PostDetailPage = () => {
                             const isPlatformAdmin = user?.role === 'admin';
                             const isGroupAdmin = group?.admins?.some((a) => (typeof a === 'string' ? a : a._id) === user?._id);
                             const canDelete = isCommentAuthor || isPostAuthor || isGroupAdmin || isPlatformAdmin;
+                            const isEditing = editingCommentId === comment._id;
                             return (
                                 <motion.div
                                     key={comment._id || index}
@@ -380,7 +383,22 @@ const PostDetailPage = () => {
                                                             minute: '2-digit',
                                                         })}
                                                     </span>
-                                                    {canDelete && (
+                                                    {isCommentAuthor && !isEditing && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            className="text-text-secondary hover:text-accent-purple hover:bg-accent-purple/10 ml-auto"
+                                                            title="Edit comment"
+                                                            aria-label="Edit comment"
+                                                            onClick={() => {
+                                                                setEditingCommentId(comment._id);
+                                                                setEditText(comment.content);
+                                                            }}
+                                                        >
+                                                            <Pencil size={13} />
+                                                        </Button>
+                                                    )}
+                                                    {canDelete && !isEditing && (
                                                         <Button
                                                             variant="ghost"
                                                             size="icon-sm"
@@ -404,10 +422,59 @@ const PostDetailPage = () => {
                                                         </Button>
                                                     )}
                                                 </div>
-                                                {/* Comment text */}
-                                                <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap leading-relaxed">
-                                                    {comment.content}
-                                                </p>
+                                                {/* Comment text / inline edit */}
+                                                {isEditing ? (
+                                                    <div className="mt-1">
+                                                        <textarea
+                                                            value={editText}
+                                                            onChange={(e) => setEditText(e.target.value)}
+                                                            rows={3}
+                                                            maxLength={2000}
+                                                            className="w-full px-3 py-2 bg-surface-alt dark:bg-surface-dark border border-border dark:border-border-dark
+                                                                rounded-xl text-sm text-text-primary dark:text-text-dark
+                                                                focus:outline-none focus:ring-2 focus:ring-accent-purple/50 resize-none"
+                                                        />
+                                                        <div className="flex justify-end gap-2 mt-1.5">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => { setEditingCommentId(null); setEditText(''); }}
+                                                            >
+                                                                <X size={13} /> Cancel
+                                                            </Button>
+                                                            <Button
+                                                                variant="gradient"
+                                                                size="sm"
+                                                                onClick={async () => {
+                                                                    const trimmed = editText.trim();
+                                                                    if (!trimmed) return;
+                                                                    try {
+                                                                        const res = await postAPI.updateComment(groupId, postId, comment._id, { content: trimmed });
+                                                                        const updated = res.data?.data?.comment;
+                                                                        setComments((prev) =>
+                                                                            prev.map((c) =>
+                                                                                c._id === comment._id
+                                                                                    ? { ...c, content: updated?.content ?? trimmed }
+                                                                                    : c
+                                                                            )
+                                                                        );
+                                                                        setEditingCommentId(null);
+                                                                        setEditText('');
+                                                                        toast.success('Comment updated');
+                                                                    } catch (err) {
+                                                                        toast.error('Failed to update comment');
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Check size={13} /> Save
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap leading-relaxed">
+                                                        {comment.content}
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>

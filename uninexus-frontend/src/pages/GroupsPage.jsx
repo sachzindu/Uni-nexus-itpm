@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Plus, Users, Tag, LayoutGrid, Check } from 'lucide-react';
@@ -44,6 +44,19 @@ const GroupsPage = () => {
     useEffect(() => {
         fetchGroups();
     }, []);
+
+    // Auto-trigger search with 300ms debounce when search input changes
+    const isFirstRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        const timer = setTimeout(() => {
+            fetchGroups();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
     // Fetch friends when modal opens
     useEffect(() => {

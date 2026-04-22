@@ -5,12 +5,12 @@ const createPostSchema = Joi.object({
         'any.required': 'Post content is required',
         'string.empty': 'Post content cannot be empty',
     }),
-    image: Joi.string().uri().allow('').optional(),
+    image: Joi.string().allow('').optional(),
 });
 
 const updatePostSchema = Joi.object({
     content: Joi.string().trim().min(1).max(5000),
-    image: Joi.string().uri().allow('').optional(),
+    image: Joi.string().allow('').optional(),
 }).min(1);
 
 const addCommentSchema = Joi.object({

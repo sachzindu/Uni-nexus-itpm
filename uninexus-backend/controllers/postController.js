@@ -195,6 +195,25 @@ const getComments = async (req, res, next) => {
     }
 };
 
+/**
+ * @desc    Update a comment
+ * @route   PUT /api/groups/:groupId/posts/:postId/comments/:commentId
+ * @access  Private (Comment author only)
+ */
+const updateComment = async (req, res, next) => {
+    try {
+        const comment = await postService.updateComment(
+            req.params.postId,
+            req.params.commentId,
+            req.user._id,
+            req.body.content
+        );
+        res.status(200).json({ success: true, message: 'Comment updated successfully', data: { comment } });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createPost,
     getPostsByGroup,
@@ -206,4 +225,5 @@ module.exports = {
     addComment,
     getComments,
     deleteComment,
+    updateComment,
 };
