@@ -30,6 +30,9 @@ const DiscoverMatches = () => {
             const res = await userAPI.getRecommendations(50);
             let recUsers = res.data.recommendations || [];
 
+            // Only show users with 50% or above match
+            recUsers = recUsers.filter(u => u.similarityScore != null && u.similarityScore >= 0.5);
+
             // Apply local filtering since recommendations API doesn't support them natively
             if (search) {
                 const lowerSearch = search.toLowerCase();
@@ -76,10 +79,10 @@ const DiscoverMatches = () => {
                 className="mb-8"
             >
                 <h1 className="text-3xl font-extrabold text-text-primary dark:text-text-dark">
-                    Discover <span className="gradient-text">Matches</span>
+                    Recommended <span className="gradient-text">friends</span>
                 </h1>
                 <p className="text-text-secondary dark:text-text-dark-secondary mt-1">
-                    Find and connect with students across your campus.
+                    These are the students with the most similar insterests as yours
                 </p>
             </motion.div>
 
@@ -203,43 +206,105 @@ const DiscoverMatches = () => {
                 </div>
             ) : users.length > 0 ? (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {users.map((student) => (
-                        <Card key={student._id} className="text-center">
-                            <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
-                            <h3 className="font-semibold text-text-primary dark:text-text-dark">
-                                {student.name}
-                            </h3>
-                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-0.5">
-                                {student.department || 'Department not set'} {student.year ? `• Year ${student.year}` : ''}
-                            </p>
-                            {student.bio && (
-                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2 line-clamp-2">
-                                    {student.bio}
-                                </p>
-                            )}
-                            <div className="flex flex-wrap justify-center gap-1 mt-3">
-                                {student.interests?.slice(0, 3).map((int) => (
-                                    <Badge key={int} variant="default" className="text-[10px]">
-                                        {int}
-                                    </Badge>
-                                ))}
-                                {student.interests?.length > 3 && (
-                                    <Badge variant="purple" className="text-[10px]">
-                                        +{student.interests.length - 3}
-                                    </Badge>
+                    {users.map((student) => {
+                        const matchPercent = student.similarityScore != null
+                            ? Math.round(student.similarityScore * 100)
+                            : null;
+
+                        // Color tiers based on match strength
+                        let ringColor = 'from-blue-400 to-indigo-500';
+                        let textColor = 'text-blue-600 dark:text-blue-400';
+                        let bgGlow = 'bg-blue-500/10';
+                        if (matchPercent != null) {
+                            if (matchPercent >= 75) {
+                                ringColor = 'from-emerald-400 to-green-500';
+                                textColor = 'text-emerald-600 dark:text-emerald-400';
+                                bgGlow = 'bg-emerald-500/10';
+                            } else if (matchPercent >= 50) {
+                                ringColor = 'from-amber-400 to-orange-500';
+                                textColor = 'text-amber-600 dark:text-amber-400';
+                                bgGlow = 'bg-amber-500/10';
+                            } else if (matchPercent >= 25) {
+                                ringColor = 'from-violet-400 to-purple-500';
+                                textColor = 'text-violet-600 dark:text-violet-400';
+                                bgGlow = 'bg-violet-500/10';
+                            }
+                        }
+
+                        return (
+                            <Card key={student._id} className="text-center relative overflow-visible">
+                                {/* Match percentage badge */}
+                                {matchPercent != null && (
+                                    <div className="absolute -top-3 -right-3 z-10">
+                                        <div className={`relative w-12 h-12 rounded-full bg-gradient-to-br ${ringColor} p-[2px] shadow-lg`}>
+                                            <div className={`w-full h-full rounded-full bg-white dark:bg-surface-dark-alt flex items-center justify-center ${bgGlow}`}>
+                                                <span className={`text-xs font-bold ${textColor}`}>
+                                                    {matchPercent}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
-                            <Button
-                                variant="gradient"
-                                size="sm"
-                                className="mt-4 w-full"
-                                onClick={() => navigate(`/students/${student._id}`)}
-                            >
-                                <Eye size={14} />
-                                View Profile
-                            </Button>
-                        </Card>
-                    ))}
+
+                                <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
+                                <h3 className="font-semibold text-text-primary dark:text-text-dark">
+                                    {student.name}
+                                </h3>
+                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-0.5">
+                                    {student.department || 'Department not set'} {student.year ? `• Year ${student.year}` : ''}
+                                </p>
+
+                                {/* Match bar indicator */}
+                                {matchPercent != null && (
+                                    <div className="mt-2 px-2">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-medium text-text-secondary dark:text-text-dark-secondary">
+                                                Match
+                                            </span>
+                                            <span className={`text-[10px] font-bold ${textColor}`}>
+                                                {matchPercent}%
+                                            </span>
+                                        </div>
+                                        <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                            <motion.div
+                                                className={`h-full rounded-full bg-gradient-to-r ${ringColor}`}
+                                                initial={{ width: 0 }}
+                                                animate={{ width: `${matchPercent}%` }}
+                                                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {student.bio && (
+                                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2 line-clamp-2">
+                                        {student.bio}
+                                    </p>
+                                )}
+                                <div className="flex flex-wrap justify-center gap-1 mt-3">
+                                    {student.interests?.slice(0, 3).map((int) => (
+                                        <Badge key={int} variant="default" className="text-[10px]">
+                                            {int}
+                                        </Badge>
+                                    ))}
+                                    {student.interests?.length > 3 && (
+                                        <Badge variant="purple" className="text-[10px]">
+                                            +{student.interests.length - 3}
+                                        </Badge>
+                                    )}
+                                </div>
+                                <Button
+                                    variant="gradient"
+                                    size="sm"
+                                    className="mt-4 w-full"
+                                    onClick={() => navigate(`/students/${student._id}`)}
+                                >
+                                    <Eye size={14} />
+                                    View Profile
+                                </Button>
+                            </Card>
+                        );
+                    })}
                 </div>
             ) : (
                 <Card hover={false} className="text-center py-16">
