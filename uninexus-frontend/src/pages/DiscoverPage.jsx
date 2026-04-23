@@ -35,7 +35,8 @@ const DiscoverPage = () => {
                 const lowerSearch = search.toLowerCase();
                 recUsers = recUsers.filter(u =>
                     u.name?.toLowerCase().includes(lowerSearch) ||
-                    u.email?.toLowerCase().includes(lowerSearch)
+                    u.email?.toLowerCase().includes(lowerSearch) ||
+                    u.interests?.some(interest => interest.toLowerCase().includes(lowerSearch))
                 );
             }
             if (filters.department && filters.department !== 'All') {
@@ -92,7 +93,7 @@ const DiscoverPage = () => {
                     />
                     <input
                         type="text"
-                        placeholder="Search students by name..."
+                        placeholder="Search by name or interests..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-surface-dark-alt
@@ -229,7 +230,7 @@ const DiscoverPage = () => {
                         }
 
                         return (
-                            <Card key={student._id} className="text-center relative overflow-visible">
+                            <Card key={student._id} className="text-center relative overflow-visible flex flex-col h-full">
                                 {/* Match percentage badge */}
                                 {matchPercent != null && (
                                     <div className="absolute -top-3 -right-3 z-10">
@@ -243,53 +244,58 @@ const DiscoverPage = () => {
                                     </div>
                                 )}
 
-                                <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
-                                <h3 className="font-semibold text-text-primary dark:text-text-dark">
-                                    {student.name}
-                                </h3>
-                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-0.5">
-                                    {student.department || 'Department not set'} {student.year ? `• Year ${student.year}` : ''}
-                                </p>
-
-                                {/* Match bar indicator */}
-                                {matchPercent != null && (
-                                    <div className="mt-2 px-2">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-[10px] font-medium text-text-secondary dark:text-text-dark-secondary">
-                                                Match
-                                            </span>
-                                            <span className={`text-[10px] font-bold ${textColor}`}>
-                                                {matchPercent}%
-                                            </span>
-                                        </div>
-                                        <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                            <motion.div
-                                                className={`h-full rounded-full bg-gradient-to-r ${ringColor}`}
-                                                initial={{ width: 0 }}
-                                                animate={{ width: `${matchPercent}%` }}
-                                                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-
-                                {student.bio && (
-                                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2 line-clamp-2">
-                                        {student.bio}
+                                {/* Card content — grows to fill available space */}
+                                <div className="flex-1">
+                                    <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
+                                    <h3 className="font-semibold text-text-primary dark:text-text-dark">
+                                        {student.name}
+                                    </h3>
+                                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-0.5">
+                                        {student.department || 'Department not set'} {student.year ? `• Year ${student.year}` : ''}
                                     </p>
-                                )}
-                                <div className="flex flex-wrap justify-center gap-1 mt-3">
-                                    {student.interests?.slice(0, 3).map((int) => (
-                                        <Badge key={int} variant="default" className="text-[10px]">
-                                            {int}
-                                        </Badge>
-                                    ))}
-                                    {student.interests?.length > 3 && (
-                                        <Badge variant="purple" className="text-[10px]">
-                                            +{student.interests.length - 3}
-                                        </Badge>
+
+                                    {/* Match bar indicator */}
+                                    {matchPercent != null && (
+                                        <div className="mt-2 px-2">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-medium text-text-secondary dark:text-text-dark-secondary">
+                                                    Match
+                                                </span>
+                                                <span className={`text-[10px] font-bold ${textColor}`}>
+                                                    {matchPercent}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                                <motion.div
+                                                    className={`h-full rounded-full bg-gradient-to-r ${ringColor}`}
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${matchPercent}%` }}
+                                                    transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+                                                />
+                                            </div>
+                                        </div>
                                     )}
+
+                                    {student.bio && (
+                                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2 line-clamp-2">
+                                            {student.bio}
+                                        </p>
+                                    )}
+                                    <div className="flex flex-wrap justify-center gap-1 mt-3">
+                                        {student.interests?.slice(0, 3).map((int) => (
+                                            <Badge key={int} variant="default" className="text-[10px]">
+                                                {int}
+                                            </Badge>
+                                        ))}
+                                        {student.interests?.length > 3 && (
+                                            <Badge variant="purple" className="text-[10px]">
+                                                +{student.interests.length - 3}
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
+
+                                {/* Button pinned to bottom */}
                                 <Button
                                     variant="gradient"
                                     size="sm"
