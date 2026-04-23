@@ -31,7 +31,7 @@ const DashboardPage = () => {
         const fetchData = async () => {
             try {
                 const [recRes, evtRes, grpRes, featRes] = await Promise.allSettled([
-                    userAPI.getRecommendations(6),
+                    userAPI.getRecommendations(20),
                     eventAPI.getAll({ upcoming: 'true', limit: 4 }),
                     groupAPI.getAll({ limit: 4 }),
                     eventAPI.getFeatured(),
@@ -39,8 +39,10 @@ const DashboardPage = () => {
 
                 if (recRes.status === 'fulfilled') {
                     const data = recRes.value?.data;
+                    const allRecs = data?.type === 'users' ? data.recommendations : [];
+                    // Only show users with 50% or above match
                     setRecommendations(
-                        data?.type === 'users' ? data.recommendations : []
+                        allRecs.filter(r => r.similarityScore != null && r.similarityScore >= 0.5)
                     );
                 }
                 if (evtRes.status === 'fulfilled') {
