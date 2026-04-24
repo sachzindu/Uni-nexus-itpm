@@ -4,8 +4,9 @@ import {
 } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    Search, Plus, Calendar, MapPin, Users, Clock, Pencil, Trash2, Eye,
+    Search, Plus, Calendar, MapPin, Users, Clock, Pencil, Trash2, Eye, Scan, Check, AlertCircle,
 } from 'lucide-react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useAuth } from '../contexts/AuthContext';
 import { useEventStore } from '../contexts/EventContext';
 import { useToast } from '../components/ui/Toast';
@@ -16,6 +17,15 @@ import Modal from '../components/ui/Modal';
 import Skeleton from '../components/ui/Skeleton';
 import EventForm from '../components/EventForm';
 import { eventAPI } from '../services/api';
+
+const getDeterministicRegId = (eventId, userId) => {
+    if (!eventId || !userId) return '';
+    const combined = `${eventId}-${userId}`;
+    const eventPart = eventId.toString().slice(-4).toUpperCase();
+    const userPart = userId.toString().slice(-4).toUpperCase();
+    const hash = btoa(combined).substring(0, 4).toUpperCase();
+    return `UNI-${eventPart}-${userPart}-${hash}`;
+};
 
 const EventsPage = () => {
     const { user } = useAuth();
@@ -32,6 +42,8 @@ const EventsPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const isAdmin = user?.role === 'admin';
+    const MotionDiv = motion.div;
+    const MotionButton = motion.button;
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('');
@@ -42,21 +54,18 @@ const EventsPage = () => {
     const [viewingEvent, setViewingEvent] = useState(null);
     // Admin: Registered Students modal state
     const [registeredStudents, setRegisteredStudents] = useState([]);
-    const [studentsLoading, setStudentsLoading] = useState(false);
-    const [studentsError, setStudentsError] = useState(null);
+    const [showScanner, setShowScanner] = useState(false);
+    const [scanResult, setScanResult] = useState(null);
+    const scannerRef = useRef(null);
 
     // Admin: Fetch registered students for event
     const fetchRegisteredStudents = async (eventId) => {
-        setStudentsLoading(true);
-        setStudentsError(null);
         try {
             const data = await eventAPI.getAttendance(eventId);
             setRegisteredStudents(Array.isArray(data) ? data : []);
         } catch (err) {
-            setStudentsError(err.message || 'Failed to fetch registered students');
+            console.error(err);
             setRegisteredStudents([]);
-        } finally {
-            setStudentsLoading(false);
         }
     };
 
@@ -64,7 +73,6 @@ const EventsPage = () => {
         if (viewingEvent?._id) {
             fetchRegisteredStudents(viewingEvent._id);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [viewingEvent?.attendees?.length, viewingEvent?._id]);
     const [featuredEvent, setFeaturedEvent] = useState(null);
     const [featuredLoading, setFeaturedLoading] = useState(false);
@@ -110,20 +118,94 @@ const EventsPage = () => {
     }, [refreshEvents]);
 
     useEffect(() => {
-        console.log('Fetched events:', safeEvents);
-    }, [safeEvents]);
-
-    useEffect(() => {
-        console.log('User:', user);
-    }, [user]);
-
-    useEffect(() => {
         const message = error?.message || '';
         if (message && lastErrorRef.current !== message) {
             lastErrorRef.current = message;
             toast.error(message || 'Failed to load events');
         }
     }, [error, toast]);
+
+    // QR Scanner Lifecycle
+    useEffect(() => {
+        if (showScanner) {
+            scannerRef.current = new Html5QrcodeScanner(
+                'reader',
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                false
+            );
+
+            scannerRef.current.render(onScanSuccess, onScanFailure);
+        }
+
+        return () => {
+            if (scannerRef.current) {
+                scannerRef.current.clear().catch(error => console.error("Failed to clear scanner:", error));
+            }
+        };
+    }, [showScanner]);
+
+    function onScanSuccess(decodedText) {
+        if (scannerRef.current) {
+            scannerRef.current.clear().then(() => {
+                setShowScanner(false);
+                verifyTicket(decodedText);
+            });
+        }
+    }
+
+    function onScanFailure() {
+        // console.warn(`Code scan error = ${error}`);
+    }
+
+    const verifyTicket = (decodedText) => {
+        try {
+            if (!decodedText.startsWith('UNI-')) {
+                setScanResult({
+                    status: 'error',
+                    message: 'Invalid QR Code format. Expected UNI-xxxx-xxxx-xxxx'
+                });
+                return;
+            }
+
+            let foundAttendee = null;
+            let foundEvent = null;
+
+            // Iterate through all events and their attendees to find a match
+            for (const event of safeEvents) {
+                if (!event.attendees) continue;
+                
+                for (const attendee of event.attendees) {
+                    const aId = typeof attendee === 'string' ? attendee : attendee._id;
+                    const targetRegId = getDeterministicRegId(event._id, aId);
+                    
+                    if (targetRegId === decodedText) {
+                        foundAttendee = attendee;
+                        foundEvent = event;
+                        break;
+                    }
+                }
+                if (foundAttendee) break;
+            }
+
+            if (foundAttendee && foundEvent) {
+                setScanResult({
+                    status: 'success',
+                    student: typeof foundAttendee === 'string' ? { name: 'Registered Student', email: 'Verified' } : foundAttendee,
+                    eventTitle: foundEvent.title
+                });
+            } else {
+                setScanResult({
+                    status: 'error',
+                    message: 'No matching registration found for this QR code.'
+                });
+            }
+        } catch {
+            setScanResult({
+                status: 'error',
+                message: 'Failed to process QR code.'
+            });
+        }
+    };
 
     const openCreateModal = () => {
         if (!isAdmin) return;
@@ -230,7 +312,7 @@ const EventsPage = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Header */}
-            <motion.div
+            <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8"
@@ -245,9 +327,19 @@ const EventsPage = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     {isAdmin && location.pathname.startsWith('/admin') && (
-                        <Button variant="secondary" onClick={() => navigate('/admin/dashboard')}>
-                            Back to Admin
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button 
+                                variant="gradient" 
+                                onClick={() => setShowScanner(true)}
+                                className="shadow-lg shadow-accent-purple/20"
+                            >
+                                <Scan size={18} />
+                                Scan Ticket
+                            </Button>
+                            <Button variant="secondary" onClick={() => navigate('/admin/dashboard')}>
+                                Back to Admin
+                            </Button>
+                        </div>
                     )}
                     {isAdmin && (
                         <Button variant="gradient" onClick={openCreateModal}>
@@ -256,7 +348,7 @@ const EventsPage = () => {
                         </Button>
                     )}
                 </div>
-            </motion.div>
+            </MotionDiv>
 
             {/* ── Featured Hero Banner — Student side only ── */}
 
@@ -392,7 +484,7 @@ const EventsPage = () => {
                     { label: 'Career', value: 'Career', icon: <span role="img" aria-label="Career">💼</span> },
                     { label: 'Other', value: 'Other', icon: <span role="img" aria-label="Other">✨</span> },
                 ].map((cat) => (
-                    <motion.button
+                    <MotionButton
                         key={cat.value}
                         onClick={() => setCategoryFilter(cat.value)}
                         whileHover={{ scale: 1.08 }}
@@ -402,7 +494,7 @@ const EventsPage = () => {
                     >
                         {cat.icon}
                         {cat.label}
-                    </motion.button>
+                    </MotionButton>
                 ))}
                 {(categoryFilter || statusFilter || search) && (
                     <button
@@ -642,7 +734,6 @@ const EventsPage = () => {
                 isOpen={!!viewingEvent}
                 onClose={() => {
                     setViewingEvent(null);
-                    setShowRegisteredStudents(false);
                 }}
                 title={viewingEvent?.title || 'Event Details'}
                 size="md"
@@ -734,6 +825,75 @@ const EventsPage = () => {
                             Close
                         </Button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* Scanner Modal */}
+            <Modal
+                isOpen={showScanner}
+                onClose={() => setShowScanner(false)}
+                title="Scan Registration QR"
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <div id="reader" className="overflow-hidden rounded-2xl border-2 border-dashed border-border dark:border-border-dark"></div>
+                    <p className="text-center text-xs text-text-secondary px-4">
+                        Position the student's registration QR code within the frame to verify.
+                    </p>
+                    <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
+                        Cancel
+                    </Button>
+                </div>
+            </Modal>
+
+            {/* Scan Result Modal */}
+            <Modal
+                isOpen={!!scanResult}
+                onClose={() => setScanResult(null)}
+                title={scanResult?.status === 'success' ? "Verification Successful" : "Verification Failed"}
+                size="sm"
+            >
+                <div className="text-center space-y-6 py-4">
+                    {scanResult?.status === 'success' ? (
+                        <>
+                            <div className="w-20 h-20 mx-auto rounded-full bg-success/10 flex items-center justify-center">
+                                <Check size={40} className="text-success" />
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-xl font-bold text-text-primary dark:text-text-dark">
+                                    {scanResult.student.name}
+                                </h4>
+                                <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                                    Registered for: {scanResult.eventTitle}
+                                </p>
+                                <Badge variant="success" className="mx-auto mt-2 px-4 py-1.5">
+                                    Verified Attendee
+                                </Badge>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="w-20 h-20 mx-auto rounded-full bg-error/10 flex items-center justify-center">
+                                <AlertCircle size={40} className="text-error" />
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-xl font-bold text-text-primary dark:text-text-dark">
+                                    Access Denied
+                                </h4>
+                                <p className="text-sm text-text-secondary dark:text-text-dark-secondary px-4 leading-relaxed">
+                                    {scanResult?.message}
+                                </p>
+                            </div>
+                        </>
+                    )}
+
+                    <Button 
+                        variant={scanResult?.status === 'success' ? 'gradient' : 'default'} 
+                        onClick={() => setScanResult(null)} 
+                        className="w-full h-12 rounded-2xl"
+                    >
+                        Close
+                    </Button>
                 </div>
             </Modal>
         </div>
