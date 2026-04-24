@@ -1,48 +1,145 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Users, Shield, Plus, ThumbsUp, ThumbsDown, MessageCircle,
-    Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image,
+    UserPlus, LogOut, Check, X, Send, Inbox,
+    Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image, Hash,
 } from 'lucide-react';
-import { groupAPI, postAPI } from '../services/api';
+import { groupAPI, postAPI, chatAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import { useToast } from '../components/ui/Toast';
+import { Skeleton } from '../components/ui/Loader';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Loader from '../components/ui/Loader';
+import Input from '../components/ui/Input';
+import UserAvatar from '../components/ui/UserAvatar';
+import GroupChatTab from '../components/group/GroupChatTab';
 
 const GroupDetailPage = () => {
     const { id } = useParams();
     const { user } = useAuth();
     const toast = useToast();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const {
+        socket,
+        joinRoom,
+        leaveRoom,
+        sendMessage,
+        emitTyping,
+        emitStopTyping,
+        setActiveGroupId,
+        clearGroupNotifications,
+    } = useSocket();
 
     const [group, setGroup] = useState(null);
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [newPost, setNewPost] = useState('');
-    const [posting, setPosting] = useState(false);
     const [tab, setTab] = useState('feed');
+    const [messages, setMessages] = useState([]);
+    const [msgLoading, setMsgLoading] = useState(false);
+    const [newMessageText, setNewMessageText] = useState('');
+    const [typingUsers, setTypingUsers] = useState([]);
+    const messagesEndRef = useRef(null);
+    const typingTimerRef = useRef(null);
+    const [deleteLoading, setDeleteLoading] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editLoading, setEditLoading] = useState(false);
+    const [editForm, setEditForm] = useState({ name: '', description: '', tags: '' });
+    const [postPagination, setPostPagination] = useState({ page: 1, pages: 1, total: 0 });
+    const [loadingMorePosts, setLoadingMorePosts] = useState(false);
 
-    const isAdmin = group?.admins?.some(
-        (a) => (typeof a === 'string' ? a : a._id) === user?._id
-    );
-    const isMember = group?.members?.some(
-        (m) => (typeof m === 'string' ? m : m._id) === user?._id
-    );
+    // Open edit modal and populate form
+    const openEditModal = () => {
+        setEditForm({
+            name: group?.name || '',
+            description: group?.description || '',
+            tags: (group?.tags || []).join(', '),
+        });
+        setShowEditModal(true);
+    };
+
+    const handleEditChange = (e) => {
+        setEditForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+
+        const name = editForm.name.trim();
+        const description = editForm.description.trim();
+        const tagsArray = editForm.tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
+
+        if (!name) return toast.error('Group name is required');
+        if (name.length < 3) return toast.error('Group name must be at least 3 characters');
+        if (!description) return toast.error('Description is required');
+        if (description.length < 10) return toast.error('Description must be at least 10 characters');
+        if (tagsArray.length === 0) return toast.error('At least one tag is required');
+
+        setEditLoading(true);
+        try {
+            const res = await groupAPI.update(id, { name, description, tags: tagsArray });
+            setGroup(res.data?.group || res.data);
+            toast.success('Group updated successfully');
+            setShowEditModal(false);
+        } catch (err) {
+            toast.error(err.message || 'Failed to update group');
+        } finally {
+            setEditLoading(false);
+        }
+    };
+
+    // Delete group handler (admin only)
+    const handleDeleteGroup = async () => {
+        if (!window.confirm('Are you sure you want to delete this group? This action cannot be undone.')) return;
+        setDeleteLoading(true);
+        try {
+            await groupAPI.delete(id);
+            toast.success('Group deleted');
+            navigate('/groups');
+        } catch (err) {
+            toast.error(err.message || 'Failed to delete group');
+        } finally {
+            setDeleteLoading(false);
+        }
+    };
+
+    const changeTab = (key) => {
+        setTab(key);
+        if (key === 'feed') {
+            setSearchParams({}, { replace: true });
+        } else {
+            setSearchParams({ tab: key }, { replace: true });
+        }
+    };
+
+    useEffect(() => {
+        const t = searchParams.get('tab');
+        if (t === 'messages' || t === 'members' || t === 'feed' || t === 'requests') {
+            setTab(t);
+        } else {
+            setTab('feed');
+        }
+    }, [searchParams, id]);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
                 const [grpRes, postRes] = await Promise.all([
                     groupAPI.getById(id),
-                    postAPI.getByGroup(id),
+                    postAPI.getByGroup(id, { page: 1, limit: 10 }),
                 ]);
                 setGroup(grpRes.data?.group || grpRes.data);
                 setPosts(postRes.data?.posts || postRes.data || []);
+                setPostPagination(postRes.data?.pagination || { page: 1, pages: 1, total: 0 });
             } catch (err) {
                 toast.error('Failed to load group');
                 navigate('/groups');
@@ -53,8 +150,107 @@ const GroupDetailPage = () => {
         fetchData();
     }, [id]);
 
+    useEffect(() => {
+        if (!isMember || tab !== 'messages' || !id) return;
+        let cancelled = false;
+        (async () => {
+            setMsgLoading(true);
+            try {
+                const res = await chatAPI.getGroupMessages(id);
+                if (!cancelled) setMessages(res.data?.messages || []);
+            } catch {
+                if (!cancelled) {
+                    setMessages([]);
+                    toast.error('Failed to load messages');
+                }
+            } finally {
+                if (!cancelled) setMsgLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [id, tab, isMember]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    useEffect(() => {
+        if (!socket || !isMember || tab !== 'messages' || !id) return;
+
+        setActiveGroupId(id);
+        clearGroupNotifications(id);
+        joinRoom(id);
+
+        const onNew = (msg) => {
+            setMessages((prev) => {
+                if (msg._id && prev.some((m) => m._id === msg._id)) return prev;
+                return [...prev, msg];
+            });
+        };
+
+        const onTyping = ({ userId, userName, groupId: gid }) => {
+            if (gid !== id || userId === user?._id) return;
+            setTypingUsers((prev) => {
+                if (prev.find((u) => u.userId === userId)) return prev;
+                return [...prev, { userId, userName }];
+            });
+        };
+
+        const onStopTyping = ({ userId, groupId: gid }) => {
+            if (gid !== id) return;
+            setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+        };
+
+        const onErr = (payload) => {
+            toast.error(payload?.message || 'Something went wrong');
+        };
+
+        socket.on('newMessage', onNew);
+        socket.on('userTyping', onTyping);
+        socket.on('userStopTyping', onStopTyping);
+        socket.on('error', onErr);
+
+        return () => {
+            socket.off('newMessage', onNew);
+            socket.off('userTyping', onTyping);
+            socket.off('userStopTyping', onStopTyping);
+            socket.off('error', onErr);
+            leaveRoom(id);
+            setActiveGroupId(null);
+            if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        };
+    }, [
+        socket,
+        isMember,
+        tab,
+        id,
+        user?._id,
+        joinRoom,
+        leaveRoom,
+        setActiveGroupId,
+        clearGroupNotifications,
+    ]);
+
     const handlePost = () => {
         navigate(`/groups/${id}/create-post`);
+    };
+
+    const handleLoadMorePosts = async () => {
+        if (postPagination.page >= postPagination.pages) return;
+        setLoadingMorePosts(true);
+        try {
+            const nextPage = postPagination.page + 1;
+            const res = await postAPI.getByGroup(id, { page: nextPage, limit: 10 });
+            const morePosts = res.data?.posts || [];
+            setPosts((prev) => [...prev, ...morePosts]);
+            setPostPagination(res.data?.pagination || postPagination);
+        } catch {
+            toast.error('Failed to load more posts');
+        } finally {
+            setLoadingMorePosts(false);
+        }
     };
 
     const handleUpvote = async (postId) => {
@@ -104,14 +300,22 @@ const GroupDetailPage = () => {
         }
     };
 
+    const handleSendMessage = (e) => {
+        e.preventDefault();
+        if (!newMessageText.trim() || !id || !isMember) return;
+        sendMessage(id, newMessageText.trim());
+        setNewMessageText('');
+        emitStopTyping(id);
+    };
+
     const handleJoinRequest = async (requestId, status) => {
         try {
             await groupAPI.handleJoinRequest(id, requestId, { status });
+            toast.success(status === 'approved' ? 'Request approved' : 'Request rejected');
             const grpRes = await groupAPI.getById(id);
             setGroup(grpRes.data?.group || grpRes.data);
-            toast.success(`Request ${status}`);
         } catch (err) {
-            toast.error(err.message || 'Failed to handle request');
+            toast.error(err.message || 'Failed to update request');
         }
     };
 
@@ -125,6 +329,12 @@ const GroupDetailPage = () => {
 
     if (!group) return null;
 
+    const isAdmin = (group?.admins || []).some(
+        (a) => (typeof a === 'string' ? a : a._id) === user?._id
+    );
+    const isMember = group?.members?.some(
+        (m) => (typeof m === 'string' ? m : m._id) === user?._id
+    );
     const pendingRequests = group.joinRequests?.filter((r) => r.status === 'pending') || [];
 
     return (
@@ -132,8 +342,7 @@ const GroupDetailPage = () => {
             {/* Back */}
             <button
                 onClick={() => navigate('/groups')}
-                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary
-          hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
+                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
             >
                 <ArrowLeft size={18} />
                 <span className="text-sm font-medium">Back to Groups</span>
@@ -146,6 +355,7 @@ const GroupDetailPage = () => {
                 className="bg-white dark:bg-surface-dark-alt rounded-3xl card-shadow p-6 md:p-8 mb-6"
             >
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    {/* Left: Group info */}
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-2xl gradient-bg flex items-center justify-center text-white text-2xl font-bold">
                             {group.name?.charAt(0)}
@@ -158,7 +368,7 @@ const GroupDetailPage = () => {
                                 {group.description || 'No description'}
                             </p>
                             <div className="flex flex-wrap gap-1 mt-2">
-                                {group.tags?.map((tag) => (
+                                {(group.tags || []).map((tag) => (
                                     <Badge key={tag} variant="purple" className="text-[10px]">
                                         {tag}
                                     </Badge>
@@ -166,6 +376,8 @@ const GroupDetailPage = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Right: Action buttons */}
                     <div className="flex items-center gap-2">
                         {isMember ? (
                             <>
@@ -177,6 +389,24 @@ const GroupDetailPage = () => {
                                     <LogOut size={14} />
                                     Leave
                                 </Button>
+                                {isAdmin && (
+                                    <>
+                                        <Button variant="secondary" size="sm" onClick={openEditModal}>
+                                            <Settings size={14} />
+                                            Edit Group
+                                        </Button>
+                                        <Button
+                                            variant="secondary"
+                                            size="sm"
+                                            onClick={handleDeleteGroup}
+                                            loading={deleteLoading}
+                                            className="border border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-900"
+                                        >
+                                            <Trash2 size={14} />
+                                            Delete Group
+                                        </Button>
+                                    </>
+                                )}
                             </>
                         ) : (
                             <Button variant="gradient" onClick={handleJoin}>
@@ -210,21 +440,60 @@ const GroupDetailPage = () => {
                 </div>
             </motion.div>
 
+            {/* Edit Group Modal */}
+            <Modal isOpen={showEditModal} onClose={() => setShowEditModal(false)} title="Edit Group">
+                <form onSubmit={handleEditSubmit} className="space-y-4">
+                    <Input
+                        label="Group Name"
+                        name="name"
+                        value={editForm.name}
+                        onChange={handleEditChange}
+                        required
+                    />
+                    <Input
+                        label="Description"
+                        name="description"
+                        value={editForm.description}
+                        onChange={handleEditChange}
+                        as="textarea"
+                        rows={3}
+                    />
+                    <Input
+                        label="Tags (comma separated)"
+                        name="tags"
+                        value={editForm.tags}
+                        onChange={handleEditChange}
+                    />
+                    <div className="flex justify-end gap-2">
+                        <Button type="button" variant="secondary" onClick={() => setShowEditModal(false)}>Cancel</Button>
+                        <Button type="submit" variant="gradient" loading={editLoading}>Save</Button>
+                    </div>
+                </form>
+            </Modal>
+
             {/* Tabs */}
             <div className="flex gap-1 mb-6 bg-surface-alt dark:bg-surface-dark rounded-xl p-1 overflow-x-auto">
                 {[
                     { key: 'feed', label: 'Feed', icon: MessageCircle },
+                    ...(isMember ? [{ key: 'messages', label: 'Messages', icon: Inbox }] : []),
+                    ...(isMember ? [{ key: 'chat', label: 'Chat', icon: Hash }] : []),
                     { key: 'members', label: 'Members', icon: Users },
                     ...(isAdmin ? [{ key: 'requests', label: `Requests (${pendingRequests.length})`, icon: UserPlus }] : []),
                 ].map(({ key, label, icon: Icon }) => (
                     <button
                         key={key}
-                        onClick={() => setTab(key)}
+                        type="button"
+                        onClick={() => changeTab(key)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
               transition-all cursor-pointer whitespace-nowrap ${tab === key
                                 ? 'bg-white dark:bg-surface-dark-alt card-shadow text-text-primary dark:text-text-dark'
                                 : 'text-text-secondary dark:text-text-dark-secondary hover:text-text-primary'
                             }`}
+                        onClick={() => setTab(key)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${tab === key
+                            ? 'bg-white dark:bg-surface-dark-alt card-shadow text-text-primary dark:text-text-dark'
+                            : 'text-text-secondary dark:text-text-dark-secondary hover:text-text-primary'
+                        }`}
                     >
                         <Icon size={16} />
                         {label}
@@ -239,9 +508,7 @@ const GroupDetailPage = () => {
                     {isMember && (
                         <div className="flex justify-between items-center bg-white dark:bg-surface-dark-alt rounded-3xl p-4 card-shadow">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                                    {(user?.name || 'U').charAt(0)}
-                                </div>
+                                <UserAvatar user={user} size="sm" />
                                 <span className="text-text-secondary dark:text-text-dark-secondary">
                                     Share something with the group...
                                 </span>
@@ -261,28 +528,71 @@ const GroupDetailPage = () => {
                             const voteScore = (post.upvoteCount || post.upvotes?.length || 0)
                                 - (post.downvoteCount || post.downvotes?.length || 0);
                             const commentCount = post.commentCount ?? post.comments?.length ?? 0;
+                            const canDelete = (post.author?._id === user?._id) || isAdmin;
 
                             return (
                                 <Card key={post._id} hover={false}>
+                                    {/* Post Header */}
                                     <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
-                                            {(post.author?.name || 'U').charAt(0)}
+
+                                        <div className="flex-1">
+                                            <UserAvatar user={post.author} size="xs" />
+                                            <div>
+                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
+                                                    {post.author?.name || 'Unknown'}
+                                                </p>
+                                                <p className="text-[10px] text-text-secondary dark:text-text-dark-secondary">
+                                                    {new Date(post.createdAt).toLocaleDateString()}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                                {post.author?.name || 'Unknown'}
-                                            </p>
-                                            <p className="text-[10px] text-text-secondary dark:text-text-dark-secondary">
-                                                {new Date(post.createdAt).toLocaleDateString()}
-                                            </p>
-                                        </div>
+                                        {canDelete && (
+                                            <div className="relative group">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    className="text-error hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-error focus:ring-2 focus:ring-error"
+                                                    title="Delete post"
+                                                    aria-label="Delete post"
+                                                    onClick={async () => {
+                                                        if (window.confirm('Are you sure you want to delete this post?')) {
+                                                            try {
+                                                                await postAPI.delete(id, post._id);
+                                                                setPosts((prev) => prev.filter((p) => p._id !== post._id));
+                                                                toast.success('Post deleted');
+                                                            } catch (err) {
+                                                                toast.error('Failed to delete post');
+                                                            }
+                                                        }
+                                                    }}
+                                                >
+                                                    <Trash2 size={18} />
+                                                </Button>
+                                                <span className="absolute z-10 left-1/2 -translate-x-1/2 top-8 opacity-0 group-hover:opacity-100 pointer-events-none bg-error text-white text-xs rounded px-2 py-1 transition-opacity duration-200 shadow-lg whitespace-nowrap">
+                                                    Delete post
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
+
+                                    {/* Post Content */}
                                     <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap mb-3">
                                         {post.content}
                                     </p>
+
+                                    {/* Post Image */}
                                     {post.image && (
-                                        <img src={post.image} alt="" className="rounded-2xl mb-3 max-h-80 object-cover w-full" />
+                                        <div className="w-full flex justify-center mb-3">
+                                            <img
+                                                src={post.image}
+                                                alt=""
+                                                className="rounded-2xl max-h-[400px] w-auto object-contain bg-surface-alt dark:bg-surface-dark-alt"
+                                                style={{ maxWidth: '100%' }}
+                                            />
+                                        </div>
                                     )}
+
+                                    {/* Post Actions */}
                                     <div className="flex items-center gap-4 pt-3 border-t border-border dark:border-border-dark">
                                         {/* Vote Controls */}
                                         <div className="flex items-center gap-1">
@@ -291,17 +601,17 @@ const GroupDetailPage = () => {
                                                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${hasUpvoted
                                                     ? 'text-accent-purple bg-accent-purple/10'
                                                     : 'text-text-secondary hover:text-accent-purple hover:bg-accent-purple/5'
-                                                    }`}
+                                                }`}
                                                 title="Upvote"
                                             >
                                                 <ThumbsUp size={16} className={hasUpvoted ? 'fill-accent-purple' : ''} />
                                             </button>
                                             <span className={`text-sm font-bold min-w-[2ch] text-center ${voteScore > 0
-                                                    ? 'text-accent-purple'
-                                                    : voteScore < 0
-                                                        ? 'text-red-500'
-                                                        : 'text-text-secondary dark:text-text-dark-secondary'
-                                                }`}>
+                                                ? 'text-accent-purple'
+                                                : voteScore < 0
+                                                    ? 'text-red-500'
+                                                    : 'text-text-secondary dark:text-text-dark-secondary'
+                                            }`}>
                                                 {voteScore}
                                             </span>
                                             <button
@@ -309,7 +619,7 @@ const GroupDetailPage = () => {
                                                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${hasDownvoted
                                                     ? 'text-red-500 bg-red-500/10'
                                                     : 'text-text-secondary hover:text-red-500 hover:bg-red-500/5'
-                                                    }`}
+                                                }`}
                                                 title="Downvote"
                                             >
                                                 <ThumbsDown size={16} className={hasDownvoted ? 'fill-red-500' : ''} />
@@ -335,7 +645,140 @@ const GroupDetailPage = () => {
                             <p className="text-text-secondary dark:text-text-dark-secondary">No posts yet. Be the first to share!</p>
                         </Card>
                     )}
+
+                    {/* Load More Posts */}
+                    {postPagination.page < postPagination.pages && (
+                        <div className="flex justify-center pt-2">
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={handleLoadMorePosts}
+                                loading={loadingMorePosts}
+                            >
+                                <MessageCircle size={14} />
+                                Load More Posts
+                            </Button>
+                        </div>
+                    )}
                 </div>
+            )}
+
+            {/* Group messages (interest group / socket room) */}
+            {tab === 'messages' && isMember && (
+                <div className="bg-white dark:bg-surface-dark-alt rounded-3xl card-shadow overflow-hidden flex flex-col min-h-[420px]">
+                    <div className="px-4 py-3 border-b border-border dark:border-border-dark">
+                        <h2 className="text-lg font-bold text-text-primary dark:text-text-dark">
+                            Group messages
+                        </h2>
+                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                            Real-time chat for members
+                            {typingUsers.length > 0 && (
+                                <span className="text-accent-purple ml-2">
+                                    {typingUsers.map((u) => u.userName).join(', ')} typing…
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[50vh] bg-surface-alt dark:bg-surface-dark">
+                        {msgLoading ? (
+                            <div className="space-y-3">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : ''}`}>
+                                        <Skeleton className="h-10 w-48 rounded-2xl" />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : messages.length > 0 ? (
+                            messages.map((msg, i) => {
+                                const isMine =
+                                    (typeof msg.sender === 'string' ? msg.sender : msg.sender?._id) ===
+                                    user?._id;
+                                const senderName =
+                                    typeof msg.sender === 'string' ? 'User' : msg.sender?.name || 'User';
+                                return (
+                                    <motion.div
+                                        key={msg._id || i}
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <div className={`max-w-xs sm:max-w-md ${isMine ? 'order-2' : ''}`}>
+                                            {!isMine && (
+                                                <p className="text-[10px] text-text-secondary dark:text-text-dark-secondary mb-0.5 px-3">
+                                                    {senderName}
+                                                </p>
+                                            )}
+                                            <div
+                                                className={`px-4 py-2 rounded-2xl text-sm ${isMine
+                                                    ? 'gradient-bg text-white rounded-br-md'
+                                                    : 'bg-white dark:bg-surface-dark-alt text-text-primary dark:text-text-dark rounded-bl-md'
+                                                    }`}
+                                            >
+                                                {msg.content}
+                                            </div>
+                                            <p
+                                                className={`text-[9px] text-text-secondary/60 mt-0.5 ${isMine ? 'text-right' : 'text-left'
+                                                    } px-3`}
+                                            >
+                                                {msg.createdAt
+                                                    ? new Date(msg.createdAt).toLocaleTimeString([], {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })
+                                                    : ''}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <Inbox size={40} className="text-text-secondary/25 mb-2" />
+                                <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                                    No messages yet. Say hello to the group.
+                                </p>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    <form
+                        onSubmit={handleSendMessage}
+                        className="flex items-center gap-2 p-4 border-t border-border dark:border-border-dark bg-white dark:bg-surface-dark-alt"
+                    >
+                        <input
+                            type="text"
+                            value={newMessageText}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                setNewMessageText(v);
+                                if (!id) return;
+                                if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+                                if (v.trim()) {
+                                    emitTyping(id);
+                                    typingTimerRef.current = setTimeout(() => emitStopTyping(id), 1500);
+                                } else {
+                                    emitStopTyping(id);
+                                }
+                            }}
+                            onBlur={() => emitStopTyping(id)}
+                            placeholder="Message the group…"
+                            className="flex-1 bg-surface-alt dark:bg-surface-dark px-4 py-2 rounded-xl text-sm
+                text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                        />
+                        <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            type="submit"
+                            disabled={!newMessageText.trim()}
+                            className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center text-white
+                disabled:opacity-50 cursor-pointer"
+                        >
+                            <Send size={18} />
+                        </motion.button>
+                    </form>
+                </div>
+            {/* Chat Tab */}
+            {tab === 'chat' && isMember && (
+                <GroupChatTab groupId={id} />
             )}
 
             {/* Members Tab */}
@@ -343,14 +786,14 @@ const GroupDetailPage = () => {
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {group.members?.map((member) => {
                         const m = typeof member === 'string' ? { _id: member, name: 'User' } : member;
-                        const memberIsAdmin = group.admins?.some(
+                        const memberIsAdmin = (group.admins || []).some(
                             (a) => (typeof a === 'string' ? a : a._id) === m._id
                         );
+                        const canRemove = isAdmin && !memberIsAdmin && m._id !== user?._id;
+                        const canPromote = isAdmin && !memberIsAdmin && m._id !== user?._id;
                         return (
                             <Card key={m._id} hover={false} className="flex items-center gap-3 !p-4">
-                                <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
-                                    {m.name?.charAt(0)?.toUpperCase() || '?'}
-                                </div>
+                                <UserAvatar user={m} size="sm" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-semibold text-text-primary dark:text-text-dark truncate">
                                         {m.name}
@@ -362,6 +805,44 @@ const GroupDetailPage = () => {
                                     )}
                                 </div>
                                 {memberIsAdmin && <Badge variant="purple" className="text-[10px]">Admin</Badge>}
+                                {canPromote && (
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={async () => {
+                                            if (!window.confirm(`Promote ${m.name || 'this user'} to admin?`)) return;
+                                            try {
+                                                await groupAPI.promoteMember(id, m._id);
+                                                const grpRes = await groupAPI.getById(id);
+                                                setGroup(grpRes.data?.group || grpRes.data);
+                                                toast.success(`${m.name || 'Member'} promoted to admin`);
+                                            } catch (err) {
+                                                toast.error(err.message || 'Failed to promote member');
+                                            }
+                                        }}
+                                    >
+                                        Promote
+                                    </Button>
+                                )}
+                                {canRemove && (
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={async () => {
+                                            if (!window.confirm(`Remove ${m.name || 'this user'} from the group?`)) return;
+                                            try {
+                                                await groupAPI.removeMember(id, m._id);
+                                                const grpRes = await groupAPI.getById(id);
+                                                setGroup(grpRes.data?.group || grpRes.data);
+                                                toast.success('Member removed');
+                                            } catch (err) {
+                                                toast.error(err.message || 'Failed to remove member');
+                                            }
+                                        }}
+                                    >
+                                        Remove
+                                    </Button>
+                                )}
                             </Card>
                         );
                     })}
@@ -375,12 +856,13 @@ const GroupDetailPage = () => {
                         pendingRequests.map((req) => (
                             <Card key={req._id} hover={false} className="flex items-center justify-between !p-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-surface-alt dark:bg-surface-dark flex items-center justify-center">
-                                        <UserPlus size={18} className="text-text-secondary" />
-                                    </div>
+                                    <UserAvatar user={req.user} size="sm" />
                                     <div>
                                         <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                            User {req.user?.toString?.()?.slice(-6) || 'Unknown'}
+                                            {req.user?.name || 'Unknown User'}
+                                        </p>
+                                        <p className="text-xs text-text-secondary">
+                                            {req.user?.email || ''}
                                         </p>
                                         <p className="text-xs text-text-secondary">
                                             Requested {new Date(req.requestedAt).toLocaleDateString()}

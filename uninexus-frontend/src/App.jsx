@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { EventProvider } from './contexts/EventContext';
 import { ToastProvider } from './components/ui/Toast';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminProtectedRoute from './components/AdminProtectedRoute';
@@ -25,159 +26,207 @@ import ProfilePage from './pages/ProfilePage';
 import StudentProfilePage from './pages/StudentProfilePage';
 import FriendsPage from './pages/FriendsPage';
 import DiscoverMatches from './pages/DiscoverMatches';
+import MyGroupsPage from './pages/MyGroupsPage';
+import MyEventsPage from './pages/MyEventsPage';
 
 // Admin Pages
 import AdminLoginPage from './pages/AdminLoginPage';
 import AdminSignupPage from './pages/AdminSignupPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminEventEditPage from './pages/AdminEventEditPage';
+import AdminEventManagePage from './pages/AdminEventManagePage';
+import AdminRequestPage from './pages/AdminRequestPage';
 
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <SocketProvider>
-            <ToastProvider>
-              <Routes>
-                {/* Public routes with layout */}
-                <Route element={<MainLayout />}>
-                  <Route path="/" element={<LandingPage />} />
+          <EventProvider>
+            <SocketProvider>
+              <ToastProvider>
+                <Routes>
+                  {/* Public routes with layout */}
+                  <Route element={<MainLayout />}>
+                    <Route path="/" element={<LandingPage />} />
 
-                  {/* Protected routes */}
+                    {/* Protected routes */}
+                    <Route
+                      path="/onboarding"
+                      element={
+                        <ProtectedRoute>
+                          <OnboardingPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <ProtectedRoute>
+                          <DashboardPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/discovermatches"
+                      element={
+                        <ProtectedRoute>
+                          <DiscoverMatches />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/my-groups"
+                      element={
+                        <ProtectedRoute>
+                          <MyGroupsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/dashboard/my-events"
+                      element={
+                        <ProtectedRoute>
+                          <MyEventsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/discover"
+                      element={
+                        <ProtectedRoute>
+                          <DiscoverPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/groups"
+                      element={
+                        <ProtectedRoute>
+                          <GroupsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/groups/:id"
+                      element={
+                        <ProtectedRoute>
+                          <GroupDetailPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/groups/:id/create-post"
+                      element={
+                        <ProtectedRoute>
+                          <CreatePostPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/groups/:id/posts/:postId"
+                      element={
+                        <ProtectedRoute>
+                          <PostDetailPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/events"
+                      element={
+                        <ProtectedRoute>
+                          <EventsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/events/:id"
+                      element={
+                        <ProtectedRoute>
+                          <EventDetailPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/chat"
+                      element={
+                        <ProtectedRoute>
+                          <ChatPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/profile"
+                      element={
+                        <ProtectedRoute>
+                          <ProfilePage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/students/:id"
+                      element={
+                        <ProtectedRoute>
+                          <StudentProfilePage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/friends"
+                      element={
+                        <ProtectedRoute>
+                          <FriendsPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                  </Route>
+
+                  {/* Auth pages without layout */}
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+
+                  {/* Admin auth pages (no layout) */}
+                  <Route path="/admin/login" element={<AdminLoginPage />} />
+                  <Route path="/admin/signup" element={<AdminSignupPage />} />
+                  <Route path="/admin/request" element={<AdminRequestPage />} />
+
+                  {/* Admin protected pages (no main layout — dashboard has its own nav) */}
                   <Route
-                    path="/onboarding"
+                    path="/admin/dashboard"
                     element={
-                      <ProtectedRoute>
-                        <OnboardingPage />
-                      </ProtectedRoute>
+                      <AdminProtectedRoute>
+                        <AdminDashboardPage />
+                      </AdminProtectedRoute>
                     }
                   />
                   <Route
-                    path="/dashboard"
+                    path="/admin/events"
                     element={
-                      <ProtectedRoute>
-                        <DashboardPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard/discovermatches"
-                    element={
-                      <ProtectedRoute>
-                        <DiscoverMatches />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/discover"
-                    element={
-                      <ProtectedRoute>
-                        <DiscoverPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/groups"
-                    element={
-                      <ProtectedRoute>
-                        <GroupsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/groups/:id"
-                    element={
-                      <ProtectedRoute>
-                        <GroupDetailPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/groups/:id/create-post"
-                    element={
-                      <ProtectedRoute>
-                        <CreatePostPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/groups/:id/posts/:postId"
-                    element={
-                      <ProtectedRoute>
-                        <PostDetailPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/events"
-                    element={
-                      <ProtectedRoute>
+                      <AdminProtectedRoute>
                         <EventsPage />
-                      </ProtectedRoute>
+                      </AdminProtectedRoute>
                     }
                   />
                   <Route
-                    path="/events/:id"
+                    path="/admin/events/:id/edit"
                     element={
-                      <ProtectedRoute>
-                        <EventDetailPage />
-                      </ProtectedRoute>
+                      <AdminProtectedRoute>
+                        <AdminEventEditPage />
+                      </AdminProtectedRoute>
                     }
                   />
                   <Route
-                    path="/chat"
+                    path="/admin/events/:id/manage"
                     element={
-                      <ProtectedRoute>
-                        <ChatPage />
-                      </ProtectedRoute>
+                      <AdminProtectedRoute>
+                        <AdminEventManagePage />
+                      </AdminProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/profile"
-                    element={
-                      <ProtectedRoute>
-                        <ProfilePage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/students/:id"
-                    element={
-                      <ProtectedRoute>
-                        <StudentProfilePage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/friends"
-                    element={
-                      <ProtectedRoute>
-                        <FriendsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Route>
-
-                {/* Auth pages without layout */}
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignupPage />} />
-
-                {/* Admin auth pages (no layout) */}
-                <Route path="/admin/login" element={<AdminLoginPage />} />
-                <Route path="/admin/signup" element={<AdminSignupPage />} />
-
-                {/* Admin protected pages (no main layout — dashboard has its own nav) */}
-                <Route
-                  path="/admin/dashboard"
-                  element={
-                    <AdminProtectedRoute>
-                      <AdminDashboardPage />
-                    </AdminProtectedRoute>
-                  }
-                />
-              </Routes>
-            </ToastProvider>
-          </SocketProvider>
+                </Routes>
+              </ToastProvider>
+            </SocketProvider>
+          </EventProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
@@ -185,4 +234,3 @@ function App() {
 }
 
 export default App;
-

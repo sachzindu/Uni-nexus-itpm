@@ -17,27 +17,32 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const DashboardPage = () => {
     const { user } = useAuth();
     const [recommendations, setRecommendations] = useState([]);
     const [events, setEvents] = useState([]);
+    const [featuredEvent, setFeaturedEvent] = useState(null);
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [recRes, evtRes, grpRes] = await Promise.allSettled([
-                    userAPI.getRecommendations(6),
+                const [recRes, evtRes, grpRes, featRes] = await Promise.allSettled([
+                    userAPI.getRecommendations(20),
                     eventAPI.getAll({ upcoming: 'true', limit: 4 }),
                     groupAPI.getAll({ limit: 4 }),
+                    eventAPI.getFeatured(),
                 ]);
 
                 if (recRes.status === 'fulfilled') {
                     const data = recRes.value?.data;
+                    const allRecs = data?.type === 'users' ? data.recommendations : [];
+                    // Only show users with 50% or above match
                     setRecommendations(
-                        data?.type === 'users' ? data.recommendations : []
+                        allRecs.filter(r => r.similarityScore != null && r.similarityScore >= 0.5)
                     );
                 }
                 if (evtRes.status === 'fulfilled') {
@@ -45,6 +50,9 @@ const DashboardPage = () => {
                 }
                 if (grpRes.status === 'fulfilled') {
                     setGroups(grpRes.value?.data?.groups || []);
+                }
+                if (featRes.status === 'fulfilled') {
+                    setFeaturedEvent(featRes.value?.data || null);
                 }
             } catch {
                 // Silently handle errors for dashboard
@@ -104,21 +112,36 @@ const DashboardPage = () => {
             {/* Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
-                    { label: 'My Groups', value: user?.groups?.length || 0, icon: LayoutGrid, color: 'text-accent-purple' },
-                    { label: 'My Events', value: user?.events?.length || 0, icon: Calendar, color: 'text-accent-orange' },
-                    { label: 'Interests', value: user?.interests?.length || 0, icon: Sparkles, color: 'text-success' },
-                    { label: 'Matches', value: recommendations.length, icon: TrendingUp, color: 'text-blue-500' },
-                ].map(({ label, value, icon: Icon, color }) => (
-                    <Card key={label} hover={false} className="text-center">
-                        <Icon size={24} className={`mx-auto mb-2 ${color}`} />
-                        <p className="text-2xl font-bold text-text-primary dark:text-text-dark">
-                            {value}
-                        </p>
-                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                            {label}
-                        </p>
-                    </Card>
-                ))}
+                    { label: 'My Groups', value: user?.groups?.length || 0, icon: LayoutGrid, color: 'text-accent-purple', to: '/dashboard/my-groups' },
+                    { label: 'My Events', value: user?.events?.length || 0, icon: Calendar, color: 'text-accent-orange', to: '/dashboard/my-events' },
+                    { label: 'Interests', value: user?.interests?.length || 0, icon: Sparkles, color: 'text-success', to: null },
+                    { label: 'Matches', value: recommendations.length, icon: TrendingUp, color: 'text-blue-500', to: null },
+                ].map(({ label, value, icon: Icon, color, to }) => {
+                    const cardContent = (
+                        <Card key={label} hover={!!to} className={`text-center ${to ? 'cursor-pointer' : ''}`}>
+                            <Icon size={24} className={`mx-auto mb-2 ${color}`} />
+                            <p className="text-2xl font-bold text-text-primary dark:text-text-dark">
+                                {value}
+                            </p>
+                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                {label}
+                            </p>
+                            {to && (
+                                <p className="text-[10px] text-accent-purple mt-1 font-medium">
+                                    View all →
+                                </p>
+                            )}
+                        </Card>
+                    );
+
+                    return to ? (
+                        <Link key={label} to={to}>
+                            {cardContent}
+                        </Link>
+                    ) : (
+                        <div key={label}>{cardContent}</div>
+                    );
+                })}
             </div>
 
             <div className="grid lg:grid-cols-3 gap-8">
@@ -158,9 +181,7 @@ const DashboardPage = () => {
                             {recommendations.map((rec) => (
                                 <Card key={rec._id} className="flex flex-col">
                                     <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white font-bold text-sm">
-                                            {rec.name?.charAt(0)?.toUpperCase()}
-                                        </div>
+                                        <UserAvatar user={rec} size="sm" />
                                         <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-sm text-text-primary dark:text-text-dark truncate">
                                                 {rec.name}
@@ -212,6 +233,40 @@ const DashboardPage = () => {
 
                 {/* Sidebar: Events & Groups */}
                 <div className="space-y-8">
+                    {/* Featured Event */}
+                    {featuredEvent && (
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <h2 className="text-lg font-bold text-accent-orange flex items-center gap-2">
+                                    <Sparkles size={18} className="text-accent-orange" />
+                                    Featured Event
+                                </h2>
+                                <Link to={`/events/${featuredEvent._id}`} className="text-sm font-medium text-accent-purple hover:underline">
+                                    View
+                                </Link>
+                            </div>
+                            <Card className="!p-4 mb-4 gradient-bg text-white">
+                                <div className="mb-2">
+                                    <p className="font-semibold text-base mb-1">{featuredEvent.title}</p>
+                                    <div className="flex items-center gap-2 text-xs opacity-80">
+                                        <Clock size={12} />
+                                        {new Date(featuredEvent.eventDate).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </div>
+                                    <div className="text-xs opacity-80 mt-1">
+                                        {featuredEvent.location}
+                                    </div>
+                                </div>
+                                <div className="text-xs opacity-90 line-clamp-3 mb-1">
+                                    {featuredEvent.description}
+                                </div>
+                            </Card>
+                        </div>
+                    )}
                     {/* Upcoming Events */}
                     <div>
                         <div className="flex items-center justify-between mb-4">
@@ -237,24 +292,27 @@ const DashboardPage = () => {
                             </div>
                         ) : events.length > 0 ? (
                             <div className="space-y-3">
-                                {events.map((evt) => (
-                                    <Link key={evt._id} to={`/events/${evt._id}`}>
-                                        <Card className="!p-4 mb-3">
-                                            <p className="font-semibold text-sm text-text-primary dark:text-text-dark mb-1">
-                                                {evt.title}
-                                            </p>
-                                            <div className="flex items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
-                                                <Clock size={12} />
-                                                {new Date(evt.eventDate).toLocaleDateString('en-US', {
-                                                    month: 'short',
-                                                    day: 'numeric',
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                })}
-                                            </div>
-                                        </Card>
-                                    </Link>
-                                ))}
+                                {events
+                                    .filter(evt => !featuredEvent || evt._id !== featuredEvent._id)
+                                    .slice(0, 2)
+                                    .map((evt) => (
+                                        <Link key={evt._id} to={`/events/${evt._id}`}>
+                                            <Card className="!p-4 mb-3">
+                                                <p className="font-semibold text-sm text-text-primary dark:text-text-dark mb-1">
+                                                    {evt.title}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                    <Clock size={12} />
+                                                    {new Date(evt.eventDate).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })}
+                                                </div>
+                                            </Card>
+                                        </Link>
+                                    ))}
                             </div>
                         ) : (
                             <Card hover={false} className="text-center py-8 !p-4">

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle, Send, Clock, X,
+    ArrowLeft, ThumbsUp, ThumbsDown, MessageCircle, Send, Clock, X, Pencil, Check,
 } from 'lucide-react';
 import { postAPI, groupAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Loader from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const PostDetailPage = () => {
     const { id: groupId, postId } = useParams();
@@ -27,6 +28,8 @@ const PostDetailPage = () => {
     const [submitting, setSubmitting] = useState(false);
     const [commentPagination, setCommentPagination] = useState({ page: 1, pages: 1, total: 0 });
     const [loadingMore, setLoadingMore] = useState(false);
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editText, setEditText] = useState('');
 
     // Determine if the current user is a member of this group
     const isMember = group?.members?.some(
@@ -183,9 +186,7 @@ const PostDetailPage = () => {
                 <Card hover={false} className="mb-6">
                     {/* Author Info */}
                     <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 rounded-full gradient-bg flex items-center justify-center text-white text-sm font-bold">
-                            {(post.author?.name || 'U').charAt(0)}
-                        </div>
+                        <UserAvatar user={post.author} size="sm" />
                         <div className="flex-1">
                             <p className="font-semibold text-text-primary dark:text-text-dark">
                                 {post.author?.name || 'Unknown'}
@@ -285,9 +286,7 @@ const PostDetailPage = () => {
                 >
                     <div className="bg-white dark:bg-surface-dark-alt rounded-2xl card-shadow p-4">
                         <div className="flex gap-3">
-                            <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
-                                {(user?.name || 'U').charAt(0)}
-                            </div>
+                            <UserAvatar user={user} size="xs" className="flex-shrink-0" />
                             <div className="flex-1">
                                 <textarea
                                     ref={commentInputRef}
@@ -347,45 +346,141 @@ const PostDetailPage = () => {
             <div className="space-y-3">
                 {comments.length > 0 ? (
                     <>
-                        {comments.map((comment, index) => (
-                            <motion.div
-                                key={comment._id || index}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.05 * Math.min(index, 5) }}
-                            >
-                                {/* Rectangle comment card */}
-                                <div className="bg-white dark:bg-surface-dark-alt rounded-xl border border-border dark:border-border-dark p-4">
-                                    <div className="flex gap-3">
-                                        {/* User avatar */}
-                                        <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
-                                            {(comment.user?.name || 'U').charAt(0)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            {/* Name and time */}
-                                            <div className="flex items-center gap-2 mb-1.5">
-                                                <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
-                                                    {comment.user?.name || 'Unknown User'}
-                                                </p>
-                                                <span className="text-[10px] text-text-secondary dark:text-text-dark-secondary flex items-center gap-0.5">
-                                                    <Clock size={9} />
-                                                    {new Date(comment.createdAt).toLocaleDateString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit',
-                                                    })}
-                                                </span>
+                        {comments.map((comment, index) => {
+                            // Permission: comment author, post author, group admin, or platform admin
+                            const isCommentAuthor = comment.user?._id === user?._id;
+                            const isPostAuthor = post?.author?._id === user?._id;
+                            const isPlatformAdmin = user?.role === 'admin';
+                            const isGroupAdmin = group?.admins?.some((a) => (typeof a === 'string' ? a : a._id) === user?._id);
+                            const canDelete = isCommentAuthor || isPostAuthor || isGroupAdmin || isPlatformAdmin;
+                            const isEditing = editingCommentId === comment._id;
+                            return (
+                                <motion.div
+                                    key={comment._id || index}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.05 * Math.min(index, 5) }}
+                                >
+                                    {/* Rectangle comment card */}
+                                    <div className="bg-white dark:bg-surface-dark-alt rounded-xl border border-border dark:border-border-dark p-4">
+                                        <div className="flex gap-3">
+                                            {/* User avatar */}
+                                            <div className="w-9 h-9 rounded-full gradient-bg flex-shrink-0 flex items-center justify-center text-white text-xs font-bold">
+                                                {(comment.user?.name || 'U').charAt(0)}
                                             </div>
-                                            {/* Comment text */}
-                                            <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap leading-relaxed">
-                                                {comment.content}
-                                            </p>
+                                            <div className="flex-1 min-w-0">
+                                                {/* Name and time */}
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <p className="text-sm font-semibold text-text-primary dark:text-text-dark">
+                                                        {comment.user?.name || 'Unknown User'}
+                                                    </p>
+                                                    <span className="text-[10px] text-text-secondary dark:text-text-dark-secondary flex items-center gap-0.5">
+                                                        <Clock size={9} />
+                                                        {new Date(comment.createdAt).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })}
+                                                    </span>
+                                                    {isCommentAuthor && !isEditing && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            className="text-text-secondary hover:text-accent-purple hover:bg-accent-purple/10 ml-auto"
+                                                            title="Edit comment"
+                                                            aria-label="Edit comment"
+                                                            onClick={() => {
+                                                                setEditingCommentId(comment._id);
+                                                                setEditText(comment.content);
+                                                            }}
+                                                        >
+                                                            <Pencil size={13} />
+                                                        </Button>
+                                                    )}
+                                                    {canDelete && !isEditing && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon-sm"
+                                                            className="text-error hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-error ml-2"
+                                                            title="Delete comment"
+                                                            aria-label="Delete comment"
+                                                            onClick={async () => {
+                                                                if (window.confirm('Delete this comment?')) {
+                                                                    try {
+                                                                        await postAPI.deleteComment(groupId, postId, comment._id);
+                                                                        setComments((prev) => prev.filter((c) => c._id !== comment._id));
+                                                                        setCommentPagination((prev) => ({ ...prev, total: prev.total - 1 }));
+                                                                        toast.success('Comment deleted');
+                                                                    } catch (err) {
+                                                                        toast.error('Failed to delete comment');
+                                                                    }
+                                                                }
+                                                            }}
+                                                        >
+                                                            <X size={14} />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                {/* Comment text / inline edit */}
+                                                {isEditing ? (
+                                                    <div className="mt-1">
+                                                        <textarea
+                                                            value={editText}
+                                                            onChange={(e) => setEditText(e.target.value)}
+                                                            rows={3}
+                                                            maxLength={2000}
+                                                            className="w-full px-3 py-2 bg-surface-alt dark:bg-surface-dark border border-border dark:border-border-dark
+                                                                rounded-xl text-sm text-text-primary dark:text-text-dark
+                                                                focus:outline-none focus:ring-2 focus:ring-accent-purple/50 resize-none"
+                                                        />
+                                                        <div className="flex justify-end gap-2 mt-1.5">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => { setEditingCommentId(null); setEditText(''); }}
+                                                            >
+                                                                <X size={13} /> Cancel
+                                                            </Button>
+                                                            <Button
+                                                                variant="gradient"
+                                                                size="sm"
+                                                                onClick={async () => {
+                                                                    const trimmed = editText.trim();
+                                                                    if (!trimmed) return;
+                                                                    try {
+                                                                        const res = await postAPI.updateComment(groupId, postId, comment._id, { content: trimmed });
+                                                                        const updated = res.data?.data?.comment;
+                                                                        setComments((prev) =>
+                                                                            prev.map((c) =>
+                                                                                c._id === comment._id
+                                                                                    ? { ...c, content: updated?.content ?? trimmed }
+                                                                                    : c
+                                                                            )
+                                                                        );
+                                                                        setEditingCommentId(null);
+                                                                        setEditText('');
+                                                                        toast.success('Comment updated');
+                                                                    } catch (err) {
+                                                                        toast.error('Failed to update comment');
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Check size={13} /> Save
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-text-primary dark:text-text-dark whitespace-pre-wrap leading-relaxed">
+                                                        {comment.content}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
 
                         {/* Load More Button */}
                         {hasMore && (

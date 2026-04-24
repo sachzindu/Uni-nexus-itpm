@@ -7,6 +7,7 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const departments = [
     'All', 'Computer Science', 'Engineering', 'Business', 'Arts & Design',
@@ -22,18 +23,35 @@ const DiscoverPage = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
-    const fetchUsers = async (page = 1) => {
+    const fetchUsers = async () => {
         setLoading(true);
         try {
-            const params = { page, limit: 12 };
-            if (search) params.search = search;
-            if (filters.department && filters.department !== 'All')
-                params.department = filters.department;
-            if (filters.year) params.year = filters.year;
+            // Fetch top recommended users instead of paginated all users
+            const res = await userAPI.getRecommendations(50);
+            let recUsers = res.data.recommendations || [];
 
-            const res = await userAPI.getAllUsers(params);
-            setUsers(res.data?.users || []);
-            setPagination(res.data?.pagination || { page: 1, pages: 1, total: 0 });
+            // Apply local filtering since recommendations API doesn't support them natively
+            if (search) {
+                const lowerSearch = search.toLowerCase();
+                recUsers = recUsers.filter(u =>
+                    u.name?.toLowerCase().includes(lowerSearch) ||
+                    u.email?.toLowerCase().includes(lowerSearch) ||
+                    u.interests?.some(interest => interest.toLowerCase().includes(lowerSearch))
+                );
+            }
+            if (filters.department && filters.department !== 'All') {
+                recUsers = recUsers.filter(u =>
+                    u.department?.toLowerCase() === filters.department.toLowerCase()
+                );
+            }
+            if (filters.year) {
+                recUsers = recUsers.filter(u =>
+                    u.year === parseInt(filters.year, 10) || String(u.year) === filters.year
+                );
+            }
+
+            setUsers(recUsers);
+            setPagination({ page: 1, pages: 1, total: recUsers.length });
         } catch {
             setUsers([]);
         } finally {
@@ -59,7 +77,7 @@ const DiscoverPage = () => {
                 className="mb-8"
             >
                 <h1 className="text-3xl font-extrabold text-text-primary dark:text-text-dark">
-                    Discover <span className="gradient-text">Students</span>
+                    Discover <span className="gradient-text">friends</span>
                 </h1>
                 <p className="text-text-secondary dark:text-text-dark-secondary mt-1">
                     Find and connect with students across your campus.
@@ -75,7 +93,7 @@ const DiscoverPage = () => {
                     />
                     <input
                         type="text"
-                        placeholder="Search students by name..."
+                        placeholder="Search by name or interests..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-surface-dark-alt
@@ -186,45 +204,110 @@ const DiscoverPage = () => {
                 </div>
             ) : users.length > 0 ? (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {users.map((student) => (
-                        <Card key={student._id} className="text-center">
-                            <div className="w-16 h-16 mx-auto mb-3 rounded-full gradient-bg flex items-center justify-center text-white text-xl font-bold">
-                                {student.name?.charAt(0)?.toUpperCase()}
-                            </div>
-                            <h3 className="font-semibold text-text-primary dark:text-text-dark">
-                                {student.name}
-                            </h3>
-                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-0.5">
-                                {student.department || 'Department not set'} {student.year ? `• Year ${student.year}` : ''}
-                            </p>
-                            {student.bio && (
-                                <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2 line-clamp-2">
-                                    {student.bio}
-                                </p>
-                            )}
-                            <div className="flex flex-wrap justify-center gap-1 mt-3">
-                                {student.interests?.slice(0, 3).map((int) => (
-                                    <Badge key={int} variant="default" className="text-[10px]">
-                                        {int}
-                                    </Badge>
-                                ))}
-                                {student.interests?.length > 3 && (
-                                    <Badge variant="purple" className="text-[10px]">
-                                        +{student.interests.length - 3}
-                                    </Badge>
+                    {users.map((student) => {
+                        const matchPercent = student.similarityScore != null
+                            ? Math.round(student.similarityScore * 100)
+                            : null;
+
+                        // Color tiers based on match strength
+                        let ringColor = 'from-blue-400 to-indigo-500';
+                        let textColor = 'text-blue-600 dark:text-blue-400';
+                        let bgGlow = 'bg-blue-500/10';
+                        if (matchPercent != null) {
+                            if (matchPercent >= 75) {
+                                ringColor = 'from-emerald-400 to-green-500';
+                                textColor = 'text-emerald-600 dark:text-emerald-400';
+                                bgGlow = 'bg-emerald-500/10';
+                            } else if (matchPercent >= 50) {
+                                ringColor = 'from-amber-400 to-orange-500';
+                                textColor = 'text-amber-600 dark:text-amber-400';
+                                bgGlow = 'bg-amber-500/10';
+                            } else if (matchPercent >= 25) {
+                                ringColor = 'from-violet-400 to-purple-500';
+                                textColor = 'text-violet-600 dark:text-violet-400';
+                                bgGlow = 'bg-violet-500/10';
+                            }
+                        }
+
+                        return (
+                            <Card key={student._id} className="text-center relative overflow-visible flex flex-col h-full">
+                                {/* Match percentage badge */}
+                                {matchPercent != null && (
+                                    <div className="absolute -top-3 -right-3 z-10">
+                                        <div className={`relative w-12 h-12 rounded-full bg-gradient-to-br ${ringColor} p-[2px] shadow-lg`}>
+                                            <div className={`w-full h-full rounded-full bg-white dark:bg-surface-dark-alt flex items-center justify-center ${bgGlow}`}>
+                                                <span className={`text-xs font-bold ${textColor}`}>
+                                                    {matchPercent}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
-                            <Button
-                                variant="gradient"
-                                size="sm"
-                                className="mt-4 w-full"
-                                onClick={() => navigate(`/students/${student._id}`)}
-                            >
-                                <Eye size={14} />
-                                View Profile
-                            </Button>
-                        </Card>
-                    ))}
+
+                                {/* Card content — grows to fill available space */}
+                                <div className="flex-1">
+                                    <UserAvatar user={student} size="lg" className="mx-auto mb-3" />
+                                    <h3 className="font-semibold text-text-primary dark:text-text-dark">
+                                        {student.name}
+                                    </h3>
+                                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-0.5">
+                                        {student.department || 'Department not set'} {student.year ? `• Year ${student.year}` : ''}
+                                    </p>
+
+                                    {/* Match bar indicator */}
+                                    {matchPercent != null && (
+                                        <div className="mt-2 px-2">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-[10px] font-medium text-text-secondary dark:text-text-dark-secondary">
+                                                    Match
+                                                </span>
+                                                <span className={`text-[10px] font-bold ${textColor}`}>
+                                                    {matchPercent}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                                <motion.div
+                                                    className={`h-full rounded-full bg-gradient-to-r ${ringColor}`}
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${matchPercent}%` }}
+                                                    transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {student.bio && (
+                                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary mt-2 line-clamp-2">
+                                            {student.bio}
+                                        </p>
+                                    )}
+                                    <div className="flex flex-wrap justify-center gap-1 mt-3">
+                                        {student.interests?.slice(0, 3).map((int) => (
+                                            <Badge key={int} variant="default" className="text-[10px]">
+                                                {int}
+                                            </Badge>
+                                        ))}
+                                        {student.interests?.length > 3 && (
+                                            <Badge variant="purple" className="text-[10px]">
+                                                +{student.interests.length - 3}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Button pinned to bottom */}
+                                <Button
+                                    variant="gradient"
+                                    size="sm"
+                                    className="mt-4 w-full"
+                                    onClick={() => navigate(`/students/${student._id}`)}
+                                >
+                                    <Eye size={14} />
+                                    View Profile
+                                </Button>
+                            </Card>
+                        );
+                    })}
                 </div>
             ) : (
                 <Card hover={false} className="text-center py-16">

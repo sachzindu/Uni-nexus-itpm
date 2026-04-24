@@ -98,10 +98,10 @@ const AdminLoginPage = () => {
                         <p className="mt-2 text-text-secondary dark:text-text-dark-secondary">
                             Don&apos;t have an admin account?{' '}
                             <Link
-                                to="/admin/signup"
+                                to="/admin/request"
                                 className="font-semibold text-accent-purple hover:underline"
                             >
-                                Register here
+                                Request here
                             </Link>
                         </p>
                     </div>
@@ -111,7 +111,7 @@ const AdminLoginPage = () => {
                             label="Email"
                             type="email"
                             icon={Mail}
-                            placeholder="admin@university.edu"
+                            placeholder="admin@sliit.lk"
                             value={form.email}
                             onChange={(e) => setForm({ ...form, email: e.target.value })}
                             error={errors.email}

@@ -1,5 +1,6 @@
 const createError = require('http-errors');
 const Group = require('../models/Group');
+const Post = require('../models/Post');
 const logger = require('../utils/logger');
 
 /**
@@ -74,7 +75,8 @@ const getGroupById = async (groupId) => {
     const group = await Group.findById(groupId)
         .populate('creator', 'name email')
         .populate('admins', 'name email')
-        .populate('members', 'name email avatar interests');
+        .populate('members', 'name email avatar interests')
+        .populate('joinRequests.user', 'name email avatar');
 
     if (!group) throw createError(404, 'Group not found.');
     if (group.isArchived) throw createError(410, 'This group has been archived.');
@@ -113,7 +115,10 @@ const deleteGroup = async (groupId, userId, userRole) => {
         throw createError(403, 'Only group admins or platform admins can delete groups.');
     }
 
-    await Group.findByIdAndDelete(groupId);
+    await Promise.all([
+        Group.findByIdAndDelete(groupId),
+        Post.deleteMany({ group: groupId }),
+    ]);
     logger.info(`Group deleted: ${group.name} by user ${userId}`);
 };
 
@@ -236,4 +241,54 @@ module.exports = {
     handleJoinRequest,
     leaveGroup,
     getMembers,
+    /**
+     * Remove a member from a group. Only admins can remove others.
+     */
+    removeMember: async (groupId, memberId, requesterId) => {
+        const group = await Group.findById(groupId);
+        if (!group) throw createError(404, 'Group not found.');
+
+        // Only admins can remove
+        if (!group.admins.some((admin) => admin.equals(requesterId))) {
+            throw createError(403, 'Only group admins can remove members.');
+        }
+
+        // Prevent removing self with this endpoint (use leaveGroup)
+        if (memberId === requesterId.toString()) {
+            throw createError(400, 'Admins cannot remove themselves with this action. Use leave group.');
+        }
+
+        // Remove from members
+        group.members = group.members.filter((m) => m.toString() !== memberId);
+        // Remove from admins if applicable
+        group.admins = group.admins.filter((a) => a.toString() !== memberId);
+
+        await group.save();
+        return group;
+    },
+
+    /**
+     * Promote a member to admin. Only existing admins can promote.
+     */
+    promoteMember: async (groupId, memberId, requesterId) => {
+        const group = await Group.findById(groupId);
+        if (!group) throw createError(404, 'Group not found.');
+
+        if (!group.admins.some((a) => a.equals(requesterId))) {
+            throw createError(403, 'Only group admins can promote members.');
+        }
+
+        if (!group.members.some((m) => m.toString() === memberId)) {
+            throw createError(404, 'User is not a member of this group.');
+        }
+
+        if (group.admins.some((a) => a.toString() === memberId)) {
+            throw createError(400, 'User is already an admin.');
+        }
+
+        group.admins.push(memberId);
+        await group.save();
+        logger.info(`User ${memberId} promoted to admin in group ${groupId} by ${requesterId}`);
+        return group;
+    },
 };

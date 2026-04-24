@@ -1,10 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { getMessages, getChatGroupMessages } = require('../controllers/chatController');
+const { getMessages, getChatGroupMessages, uploadChatGroupPdf } = require('../controllers/chatController');
 const { protect } = require('../middleware/authMiddleware');
+const { uploadChatPdf } = require('../middleware/chatUpload');
 
 // All routes require authentication
 router.use(protect);
+
+// Chat group PDF upload (must be before /:groupId/messages)
+router.post(
+    '/chat-groups/:chatGroupId/upload',
+    uploadChatPdf.single('file'),
+    uploadChatGroupPdf
+);
 
 // Interest-based group messages
 router.get('/:groupId/messages', getMessages);

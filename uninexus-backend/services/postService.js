@@ -1,3 +1,34 @@
+/**
+ * Delete a comment from a post. Allowed by: comment author, post author, or group admin.
+ */
+const deleteComment = async (postId, commentId, userId, userRole) => {
+    const post = await Post.findById(postId).populate('group');
+    if (!post) throw createError(404, 'Post not found.');
+    const comment = post.comments.id(commentId);
+    if (!comment) throw createError(404, 'Comment not found.');
+
+    const isCommentAuthor = comment.user.equals(userId);
+    const isPostAuthor = post.author.equals(userId);
+    const isPlatformAdmin = userRole === 'admin';
+    let isGroupAdmin = false;
+    if (post.group && post.group.admins) {
+        isGroupAdmin = post.group.admins.some((admin) => admin.equals(userId));
+    }
+
+    if (!isCommentAuthor && !isPostAuthor && !isGroupAdmin && !isPlatformAdmin) {
+        throw createError(403, 'You do not have permission to delete this comment.');
+    }
+
+    // Robustly remove the comment (works for all Mongoose versions)
+    if (typeof comment.deleteOne === 'function') {
+        comment.deleteOne();
+    } else {
+        post.comments.pull(commentId);
+    }
+    await post.save();
+    logger.info(`Comment ${commentId} deleted from post ${postId} by user ${userId}`);
+    return { success: true };
+};
 const createError = require('http-errors');
 const Post = require('../models/Post');
 const Group = require('../models/Group');
@@ -239,6 +270,25 @@ const getComments = async (postId, query = {}) => {
     };
 };
 
+/**
+ * Update a comment. Only the comment author can edit their own comment.
+ */
+const updateComment = async (postId, commentId, userId, content) => {
+    const post = await Post.findById(postId).populate('comments.user', 'name email avatar');
+    if (!post) throw createError(404, 'Post not found.');
+    const comment = post.comments.id(commentId);
+    if (!comment) throw createError(404, 'Comment not found.');
+
+    if (!comment.user.equals(userId)) {
+        throw createError(403, 'Only the comment author can edit this comment.');
+    }
+
+    comment.content = content.trim();
+    await post.save();
+    logger.info(`Comment ${commentId} updated on post ${postId} by user ${userId}`);
+    return comment;
+};
+
 module.exports = {
     createPost,
     getPostsByGroup,
@@ -249,4 +299,6 @@ module.exports = {
     toggleDownvote,
     addComment,
     getComments,
+    deleteComment,
+    updateComment,
 };

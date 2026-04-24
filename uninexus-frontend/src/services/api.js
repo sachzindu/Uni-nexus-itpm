@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -17,6 +17,9 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+        }
         return config;
     },
     (error) => Promise.reject(error)
@@ -32,8 +35,12 @@ api.interceptors.response.use(
         // Auto-logout on 401
         if (error.response?.status === 401) {
             localStorage.removeItem('token');
-            if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
+            const currentPath = window.location.pathname || '/';
+            const isAdminRoute = currentPath.startsWith('/admin');
+            const targetPath = isAdminRoute ? '/admin/login' : '/login';
+
+            if (currentPath !== targetPath) {
+                window.location.href = targetPath;
             }
         }
 
@@ -58,6 +65,24 @@ export const userAPI = {
         api.get('/users/recommendations', { params: { limit } }),
     getAdminStats: () => api.get('/users/admin/stats'),
     getUserById: (id) => api.get(`/users/${id}`),
+    uploadProfilePhoto: (file) => {
+        const formData = new FormData();
+        formData.append('profilePhoto', file);
+        return api.post('/users/profile/photo', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
+    uploadGalleryPhotos: (files) => {
+        const formData = new FormData();
+        files.forEach((file) => formData.append('galleryPhotos', file));
+        return api.post('/users/profile/gallery', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+    },
+    deleteGalleryPhoto: (photoUrl) =>
+        api.delete('/users/profile/gallery', { data: { photoUrl } }),
+    getMyGroups: () => api.get('/users/my-groups'),
+    getMyEvents: () => api.get('/users/my-events'),
 };
 
 // ─── Interest API ────────────────────────────────────────────
@@ -83,6 +108,8 @@ export const groupAPI = {
         api.put(`/groups/${groupId}/join-requests/${requestId}`, data),
     leave: (id) => api.post(`/groups/${id}/leave`),
     getMembers: (id) => api.get(`/groups/${id}/members`),
+    removeMember: (groupId, memberId) => api.delete(`/groups/${groupId}/members/${memberId}`),
+    promoteMember: (groupId, memberId) => api.post(`/groups/${groupId}/members/${memberId}/promote`),
 };
 
 // ─── Post API ────────────────────────────────────────────────
@@ -96,6 +123,10 @@ export const postAPI = {
         api.put(`/groups/${groupId}/posts/${postId}`, data),
     delete: (groupId, postId) =>
         api.delete(`/groups/${groupId}/posts/${postId}`),
+    uploadImage: (groupId, formData) =>
+        api.post(`/groups/${groupId}/posts/upload-image`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        }),
     toggleUpvote: (groupId, postId) =>
         api.post(`/groups/${groupId}/posts/${postId}/upvote`),
     toggleDownvote: (groupId, postId) =>
@@ -104,19 +135,29 @@ export const postAPI = {
         api.post(`/groups/${groupId}/posts/${postId}/comments`, data),
     getComments: (groupId, postId, params) =>
         api.get(`/groups/${groupId}/posts/${postId}/comments`, { params }),
+    deleteComment: (groupId, postId, commentId) =>
+        api.delete(`/groups/${groupId}/posts/${postId}/comments/${commentId}`),
+    updateComment: (groupId, postId, commentId, data) =>
+        api.put(`/groups/${groupId}/posts/${postId}/comments/${commentId}`, data),
 };
 
-// ─── Event API ───────────────────────────────────────────────
 export const eventAPI = {
     getAll: (params) => api.get('/events', { params }),
     getById: (id) => api.get(`/events/${id}`),
-    create: (data) => api.post('/events', data),
-    update: (id, data) => api.put(`/events/${id}`, data),
+    getFeatured: () => api.get('/events/featured'),
+    create: (data) => api.post('/events', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+    update: (id, data) => api.put(`/events/${id}`, data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }),
     delete: (id) => api.delete(`/events/${id}`),
-    register: (id) => api.post(`/events/${id}/register`),
+    register: (id, data) => api.post(`/events/${id}/register`, data),
     unregister: (id) => api.post(`/events/${id}/unregister`),
     getAttendees: (id) => api.get(`/events/${id}/attendees`),
     getDashboardStats: () => api.get('/events/dashboard'),
+    // Admin: Get registered students for an event
+    getAttendance: (eventId) => api.get(`/events/attendance/${eventId}`),
 };
 
 // ─── Chat API ────────────────────────────────────────────────
@@ -125,6 +166,19 @@ export const chatAPI = {
         api.get(`/chat/${groupId}/messages`, { params }),
     getChatGroupMessages: (chatGroupId, params) =>
         api.get(`/chat/chat-groups/${chatGroupId}/messages`, { params }),
+    uploadChatGroupPdf: (chatGroupId, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post(`/chat/chat-groups/${chatGroupId}/upload`, formData);
+    },
+};
+
+/** Resolve relative upload paths (e.g. /uploads/chat/...) to full URL for <a href> */
+export const getUploadUrl = (relativePath) => {
+    if (!relativePath) return '';
+    if (relativePath.startsWith('http')) return relativePath;
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    return base.replace(/\/api\/?$/, '') + relativePath;
 };
 
 // ─── Chat Group API ──────────────────────────────────────────

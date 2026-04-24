@@ -1,3 +1,21 @@
+/**
+ * @desc    Delete a comment from a post
+ * @route   DELETE /api/groups/:groupId/posts/:postId/comments/:commentId
+ * @access  Private (Comment author, Post author, Group Admin, Platform Admin)
+ */
+const deleteComment = async (req, res, next) => {
+    try {
+        await postService.deleteComment(
+            req.params.postId,
+            req.params.commentId,
+            req.user._id,
+            req.user.role
+        );
+        res.status(200).json({ success: true, message: 'Comment deleted successfully' });
+    } catch (error) {
+        next(error);
+    }
+};
 const postService = require('../services/postService');
 
 /**
@@ -177,6 +195,25 @@ const getComments = async (req, res, next) => {
     }
 };
 
+/**
+ * @desc    Update a comment
+ * @route   PUT /api/groups/:groupId/posts/:postId/comments/:commentId
+ * @access  Private (Comment author only)
+ */
+const updateComment = async (req, res, next) => {
+    try {
+        const comment = await postService.updateComment(
+            req.params.postId,
+            req.params.commentId,
+            req.user._id,
+            req.body.content
+        );
+        res.status(200).json({ success: true, message: 'Comment updated successfully', data: { comment } });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createPost,
     getPostsByGroup,
@@ -187,4 +224,6 @@ module.exports = {
     toggleDownvote,
     addComment,
     getComments,
+    deleteComment,
+    updateComment,
 };

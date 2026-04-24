@@ -198,6 +198,8 @@ const initializeSocket = (io) => {
                     chatGroup: message.chatGroup,
                     content: message.content,
                     type: message.type,
+                    fileUrl: message.fileUrl,
+                    fileName: message.fileName,
                     createdAt: message.createdAt,
                 });
             } catch (error) {
