@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Search, Plus, Users, Tag, LayoutGrid, Check } from 'lucide-react';
@@ -45,6 +45,19 @@ const GroupsPage = () => {
         fetchGroups();
     }, []);
 
+    // Auto-trigger search with 300ms debounce when search input changes
+    const isFirstRender = useRef(true);
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        const timer = setTimeout(() => {
+            fetchGroups();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
     // Fetch friends when modal opens
     useEffect(() => {
         if (showCreate) {
@@ -80,30 +93,54 @@ const GroupsPage = () => {
         fetchGroups();
     };
 
-    const handleCreate = async (e) => {
-        e.preventDefault();
-        if (!createForm.name.trim()) return;
-        setCreating(true);
-        try {
-            await groupAPI.create({
-                name: createForm.name.trim(),
-                description: createForm.description.trim(),
-                tags: createForm.tags
-                    .split(',')
-                    .map((t) => t.trim())
-                    .filter(Boolean),
-                memberIds: selectedFriends,
-            });
-            toast.success('Group created successfully!');
-            setShowCreate(false);
-            setCreateForm({ name: '', description: '', tags: '' });
-            fetchGroups();
-        } catch (err) {
-            toast.error(err.message || 'Failed to create group');
-        } finally {
-            setCreating(false);
-        }
-    };
+const handleCreate = async (e) => {
+    e.preventDefault();
+
+    const name = createForm.name.trim();
+    const description = createForm.description.trim();
+    const tagsArray = createForm.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+    // Validation
+    if (!name) {
+        return toast.error('Group name is required');
+    }
+    if (name.length < 3) {
+        return toast.error('Group name must be at least 3 characters');
+    }
+    if (!description) {
+        return toast.error('Description is required');
+    }
+    if (description.length < 10) {
+        return toast.error('Description must be at least 10 characters');
+    }
+    if (tagsArray.length === 0) {
+        return toast.error('At least one tag is required');
+    }
+
+    setCreating(true);
+
+    try {
+        await groupAPI.create({
+            name,
+            description,
+            tags: tagsArray,
+            memberIds: selectedFriends,
+        });
+
+        toast.success('Group created successfully!');
+        setShowCreate(false);
+        setCreateForm({ name: '', description: '', tags: '' });
+        fetchGroups();
+
+    } catch (err) {
+        toast.error(err.message || 'Failed to create group');
+    } finally {
+        setCreating(false);
+    }
+};
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

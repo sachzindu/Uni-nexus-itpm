@@ -1,38 +1,39 @@
 const express = require('express');
 const router = express.Router();
+const upload = require('../middleware/upload'); // ← LINE 1: add කරන්න
 const {
     createEvent,
     getEvents,
     getEventById,
     updateEvent,
     deleteEvent,
-    registerForEvent,
-    unregisterFromEvent,
-    getAttendees,
-    getDashboardStats,
+    registerEvent,
+    unregisterEvent,
+    getEventAttendees,
+    getEventDashboardStats,
+    getFeaturedEvent,
 } = require('../controllers/eventController');
-const { protect } = require('../middleware/authMiddleware');
-const { checkRole } = require('../middleware/roleMiddleware');
-const { validate } = require('../middleware/validate');
-const { createEventSchema, updateEventSchema } = require('../validators/eventValidator');
+const attendanceController = require('../controllers/attendanceController');
+// Attendance API for admin: Get registered students for an event
+router.get('/attendance/:eventId', attendanceController.getAttendance);
 
-// All routes require authentication
-router.use(protect);
-
-// Dashboard stats (must be above /:id to avoid route conflict)
-router.get('/dashboard', checkRole('admin'), getDashboardStats);
-
-router.route('/')
+router
+    .route('/')
     .get(getEvents)
-    .post(validate(createEventSchema), createEvent);
+    .post(upload.single('image'), createEvent); // ← LINE 2: upload add කළා
 
-router.route('/:id')
+
+router.get('/dashboard', getEventDashboardStats);
+router.get('/featured', getFeaturedEvent);
+
+router
+    .route('/:id')
     .get(getEventById)
-    .put(validate(updateEventSchema), updateEvent)
+    .put(upload.single('image'), updateEvent)   // ← LINE 3: upload add කළා
     .delete(deleteEvent);
 
-router.post('/:id/register', registerForEvent);
-router.post('/:id/unregister', unregisterFromEvent);
-router.get('/:id/attendees', getAttendees);
+router.get('/:id/attendees', getEventAttendees);
+router.post('/:id/register', registerEvent);
+router.post('/:id/unregister', unregisterEvent);
 
 module.exports = router;

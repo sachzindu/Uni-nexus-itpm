@@ -10,6 +10,7 @@ import { useToast } from '../components/ui/Toast';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Loader';
+import UserAvatar from '../components/ui/UserAvatar';
 
 const FriendsPage = () => {
     const navigate = useNavigate();
@@ -124,11 +125,10 @@ const FriendsPage = () => {
                                 <div className="flex items-center gap-4 p-5">
                                     {/* Avatar */}
                                     <div
-                                        className="w-14 h-14 rounded-full gradient-bg flex items-center justify-center
-                                            text-white text-lg font-bold shrink-0 cursor-pointer"
+                                        className="cursor-pointer shrink-0"
                                         onClick={() => navigate(`/students/${friend._id}`)}
                                     >
-                                        {friend.name?.charAt(0)?.toUpperCase() || 'U'}
+                                        <UserAvatar user={friend} size="md" />
                                     </div>
 
                                     {/* Info */}

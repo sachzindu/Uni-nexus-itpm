@@ -1,81 +1,223 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import Input from '../components/ui/Input';
+// Use the same backend URL logic as EventsPage
+const BACKEND = import.meta.env.BACKEND_URL || 'http://localhost:3000';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Calendar, MapPin, Users, Clock, Check, Copy,
-    Ticket,
+    Ticket, QrCode, Scan, AlertCircle
 } from 'lucide-react';
-import { eventAPI } from '../services/api';
+import { QRCodeCanvas } from 'qrcode.react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useAuth } from '../contexts/AuthContext';
+import { useEventStore } from '../contexts/EventContext';
+import { eventAPI } from '../services/api';
 import { useToast } from '../components/ui/Toast';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import StarRating from '../components/ui/StarRating';
-import Loader from '../components/ui/Loader';
+
+import Skeleton from '../components/ui/Skeleton';
+
+const getDeterministicRegId = (eventId, userId) => {
+    if (!eventId || !userId) return '';
+    const combined = `${eventId}-${userId}`;
+    // Simple deterministic ID: UNI + last 4 of event + last 4 of user + short hash of both
+    const eventPart = eventId.toString().slice(-4).toUpperCase();
+    const userPart = userId.toString().slice(-4).toUpperCase();
+    const hash = btoa(combined).substring(0, 4).toUpperCase();
+    return `UNI-${eventPart}-${userPart}-${hash}`;
+};
 
 const EventDetailPage = () => {
     const { id } = useParams();
     const { user } = useAuth();
+    const {
+        loading,
+        getEventById,
+        fetchEventById,
+    } = useEventStore();
     const toast = useToast();
     const navigate = useNavigate();
+    const isAdmin = user?.role === 'admin';
+    const MotionDiv = motion.div;
 
-    const [event, setEvent] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const event = getEventById(id);
+    // Debug: log event object to verify imageUrl
+    useEffect(() => {
+        if (event) {
+            console.log('Event detail:', event);
+        }
+    }, [event]);
+    const missingToastShownRef = useRef(false);
+    const [detailLoading, setDetailLoading] = useState(true);
     const [registering, setRegistering] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [regId, setRegId] = useState('');
     const [userRating, setUserRating] = useState(0);
+    // Registration modal state
+    const [showRegModal, setShowRegModal] = useState(false);
+    const [faculty, setFaculty] = useState('');
+    const [studentId, setStudentId] = useState('');
+    const [formError, setFormError] = useState('');
+
+    // Scanner state
+    const [showScanner, setShowScanner] = useState(false);
+    const [scanResult, setScanResult] = useState(null); // { status: 'success'|'error', student?: any, message?: string }
+    const scannerRef = useRef(null);
 
     useEffect(() => {
-        const fetchEvent = async () => {
-            try {
-                const res = await eventAPI.getById(id);
-                setEvent(res.data);
-            } catch {
-                toast.error('Event not found');
-                navigate('/events');
-            } finally {
-                setLoading(false);
+        if (showScanner) {
+            // Delay a bit to ensure the element is in the DOM
+            const timer = setTimeout(() => {
+                const scanner = new Html5QrcodeScanner("reader", {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0,
+                    showZoomSliderIfSupported: true,
+                    defaultZoomValueIfSupported: 2
+                });
+
+                scanner.render((decodedText) => {
+                    const attendee = event.attendees.find(a => {
+                        const targetRegId = getDeterministicRegId(event._id, a._id || a);
+                        return targetRegId === decodedText;
+                    });
+
+                    if (attendee) {
+                        setScanResult({ 
+                            status: 'success', 
+                            student: typeof attendee === 'string' ? { name: 'Registered Student', email: 'Verified' } : attendee 
+                        });
+                    } else {
+                        setScanResult({ status: 'error', message: 'No matching registration found for this event or invalid QR code.' });
+                    }
+                    scanner.clear();
+                    setShowScanner(false);
+                }, () => {
+                    // silent ignore errors
+                });
+                
+                scannerRef.current = scanner;
+            }, 100);
+
+            return () => {
+                clearTimeout(timer);
+                if (scannerRef.current) {
+                    scannerRef.current.clear().catch(e => console.error(e));
+                    scannerRef.current = null;
+                }
+            };
+        }
+    }, [showScanner, event, id]);
+
+    // Faculties list (from OnboardingPage.jsx)
+    const faculties = [
+        'Computing',
+        'Engineering',
+        'Business',
+        'Humanities and sciences',
+        'Medicine',
+        'William anjilies Institute',
+        'Architecture',
+    ];
+
+    useEffect(() => {
+        let active = true;
+
+        const hydrateEvent = async () => {
+            if (loading) {
+                if (active) setDetailLoading(true);
+                return;
+            }
+
+            if (event) {
+                if (active) setDetailLoading(false);
+                return;
+            }
+
+            if (active) setDetailLoading(true);
+            const fetched = await fetchEventById(id);
+
+            if (!active) return;
+            if (fetched) {
+                setDetailLoading(false);
+                return;
+            }
+
+            setDetailLoading(false);
+            if (!missingToastShownRef.current) {
+                missingToastShownRef.current = true;
+                try {
+                    toast.error('Event not found');
+                } catch (err) {
+                    console.error(err);
+                } finally {
+                    navigate('/events');
+                }
             }
         };
-        fetchEvent();
-    }, [id]);
+
+        hydrateEvent();
+        return () => {
+            active = false;
+        };
+    }, [event, loading, fetchEventById, id, navigate, toast]);
 
     const isRegistered = event?.attendees?.some(
         (a) => (typeof a === 'string' ? a : a._id) === user?._id
     );
 
-    const handleRegister = async () => {
-        setRegistering(true);
-        try {
-            await eventAPI.register(id);
-            // Generate a unique registration ID
-            const uniqueId = `UNI-${Date.now().toString(36).toUpperCase()}-${Math.random()
-                .toString(36)
-                .substring(2, 6)
-                .toUpperCase()}`;
-            setRegId(uniqueId);
-            setShowSuccess(true);
-            // Refresh event data
-            const res = await eventAPI.getById(id);
-            setEvent(res.data);
-        } catch (err) {
-            toast.error(err.message || 'Registration failed');
-        } finally {
-            setRegistering(false);
-        }
+    // Open modal instead of direct register
+    const handleRegister = () => {
+        setShowRegModal(true);
+        setFormError('');
     };
 
-    const handleUnregister = async () => {
+    // Validate and submit registration
+    const handleRegSubmit = async (e) => {
+        e.preventDefault();
+        setFormError('');
+        // Validate studentId: 10 chars, alphanumeric
+        if (!faculty) {
+            setFormError('Please select your faculty.');
+            return;
+        }
+        if (!/^[A-Za-z0-9]{10}$/.test(studentId)) {
+            setFormError('Student ID must be 10 letters/numbers.');
+            return;
+        }
+        setRegistering(true);
         try {
-            await eventAPI.unregister(id);
-            toast.success('Unregistered from event');
-            const res = await eventAPI.getById(id);
-            setEvent(res.data);
+            if (!user?._id) {
+                throw new Error('Valid user id required');
+            }
+            await eventAPI.register(id, {
+                userId: user._id,
+                faculty,
+                studentIdNumber: studentId,
+            });
+            const refetched = await eventAPI.getById(id);
+            const nextEvent = refetched?.data?.event || refetched?.data || refetched?.event || refetched;
+            if (!nextEvent?._id) {
+                throw new Error('Unable to register for this event');
+            }
+            await fetchEventById(id);
+            // Generate a unique registration ID
+            const uniqueId = getDeterministicRegId(id, user._id);
+            setRegId(uniqueId);
+            setShowSuccess(true);
+            setShowRegModal(false);
+            setFaculty('');
+            setStudentId('');
         } catch (err) {
-            toast.error(err.message || 'Failed to unregister');
+            console.error(err);
+            setFormError(err.message || 'Registration failed');
+        } finally {
+            setRegistering(false);
         }
     };
 
@@ -84,15 +226,14 @@ const EventDetailPage = () => {
         toast.success('Registration ID copied!');
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <Loader size="lg" />
-            </div>
-        );
-    }
 
-    if (!event) return null;
+
+    // Always render the hero section container to avoid layout shift
+    // Use a fixed aspect ratio for the hero section (16:9)
+    const HERO_ASPECT_RATIO = 'aspect-[16/9]';
+
+    // Show skeleton loader for hero section while loading
+    const showSkeleton = loading || detailLoading || !event;
 
     const statusColors = {
         upcoming: 'purple',
@@ -101,38 +242,79 @@ const EventDetailPage = () => {
         cancelled: 'error',
     };
 
+
+
+
+    // Use the same logic as EventsPage for event image
+    const heroImage = event?.imageUrl ? `${BACKEND}${event.imageUrl}` : null;
+    const fallbackImage = 'https://via.placeholder.com/800x300?text=No+Image';
+
+
     return (
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {/* Back */}
             <button
                 onClick={() => navigate('/events')}
-                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary
-          hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
+                className="flex items-center gap-2 text-text-secondary dark:text-text-dark-secondary hover:text-text-primary dark:hover:text-text-dark mb-6 cursor-pointer"
             >
                 <ArrowLeft size={18} />
                 <span className="text-sm font-medium">Back to Events</span>
             </button>
 
-            {/* Event Header */}
-            <motion.div
+            {/* Event Hero Image Banner (Fixed aspect ratio, skeleton, overlay, hover) */}
+            <div
+                className={`relative w-full rounded-3xl overflow-hidden mb-6 group transition-all duration-300 ${HERO_ASPECT_RATIO}`}
+                style={{ minHeight: 220, maxHeight: 500 }}
+            >
+                {showSkeleton ? (
+                    <Skeleton className="w-full h-full" />
+                ) : (
+                    <>
+                        {/* Image Layer */}
+                        <img
+                            src={heroImage || fallbackImage}
+                            alt={event.title}
+                            className="w-full h-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = fallbackImage;
+                            }}
+                            style={{ minHeight: 220, maxHeight: 500 }}
+                        />
+                        {/* Overlay Layer */}
+                        <div
+                            className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/70 via-black/30 to-transparent transition-opacity duration-300 group-hover:opacity-80"
+                        />
+                        {/* Status badge on image */}
+                        <div className="absolute top-4 left-4 z-10">
+                            <Badge variant={statusColors[event.status] || 'default'} className="text-sm">
+                                {event.status}
+                            </Badge>
+                        </div>
+                        {/* Content Layer: Title and date */}
+                        <div className="absolute bottom-6 left-6 z-10 flex flex-col gap-2">
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-white drop-shadow mb-1">
+                                {event.title}
+                            </h1>
+                            <div className="flex items-center gap-2 text-white/90 text-sm">
+                                <Clock size={16} className="text-accent-purple" />
+                                {new Date(event.eventDate).toLocaleDateString('en-US', {
+                                    month: 'short', day: 'numeric', year: 'numeric',
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* Event Header (rest of details) */}
+            <MotionDiv
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="bg-white dark:bg-surface-dark-alt rounded-3xl card-shadow overflow-hidden mb-6"
             >
-                {/* Banner gradient */}
-                <div className="h-32 gradient-bg relative">
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="absolute bottom-4 left-6">
-                        <Badge variant={statusColors[event.status] || 'default'} className="text-sm">
-                            {event.status}
-                        </Badge>
-                    </div>
-                </div>
-
                 <div className="p-6 md:p-8">
-                    <h1 className="text-2xl md:text-3xl font-extrabold text-text-primary dark:text-text-dark mb-2">
-                        {event.title}
-                    </h1>
                     <p className="text-text-secondary dark:text-text-dark-secondary mb-6">
                         {event.description || 'No description provided.'}
                     </p>
@@ -195,13 +377,23 @@ const EventDetailPage = () => {
                     {event.status !== 'cancelled' && event.status !== 'completed' && (
                         <div>
                             {isRegistered ? (
-                                <div className="flex items-center gap-3">
+                                <div className="flex flex-col sm:flex-row items-center gap-3">
                                     <Badge variant="success" className="text-sm px-4 py-2">
                                         <Check size={14} />
                                         Registered
                                     </Badge>
-                                    <Button variant="ghost" size="sm" onClick={handleUnregister}>
-                                        Cancel Registration
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-[38px] px-4 rounded-xl border-border hover:bg-surface-alt dark:border-border-dark dark:hover:bg-surface-dark-alt transition-colors"
+                                        onClick={() => {
+                                            const id_to_show = getDeterministicRegId(event._id, user._id);
+                                            setRegId(id_to_show);
+                                            setShowSuccess(true);
+                                        }}
+                                    >
+                                        <QrCode size={16} />
+                                        View Ticket
                                     </Button>
                                 </div>
                             ) : (
@@ -209,7 +401,6 @@ const EventDetailPage = () => {
                                     variant="gradient"
                                     size="lg"
                                     onClick={handleRegister}
-                                    loading={registering}
                                     disabled={event.isFull}
                                 >
                                     <Ticket size={18} />
@@ -219,39 +410,117 @@ const EventDetailPage = () => {
                         </div>
                     )}
                 </div>
-            </motion.div>
+            </MotionDiv>
 
-            {/* Attendees */}
-            <Card hover={false} className="mb-6">
-                <h3 className="text-lg font-bold text-text-primary dark:text-text-dark mb-4">
-                    Attendees ({event.attendees?.length || 0})
-                </h3>
-                {event.attendees?.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                        {event.attendees.map((att) => {
-                            const a = typeof att === 'string' ? { _id: att, name: '?' } : att;
-                            return (
-                                <div
-                                    key={a._id}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-full
-                    bg-surface-alt dark:bg-surface-dark text-sm"
-                                >
-                                    <div className="w-6 h-6 rounded-full gradient-bg flex items-center justify-center text-white text-[10px] font-bold">
-                                        {a.name?.charAt(0)?.toUpperCase() || '?'}
-                                    </div>
-                                    <span className="text-text-primary dark:text-text-dark text-xs font-medium">
-                                        {a.name}
-                                    </span>
-                                </div>
-                            );
-                        })}
+            {/* Registration Modal for student info */}
+            <Modal
+                isOpen={showRegModal}
+                onClose={() => { setShowRegModal(false); setFormError(''); }}
+                title="Complete Registration"
+                size="sm"
+            >
+                <form onSubmit={handleRegSubmit} className="space-y-5">
+                    <div>
+                        <label className="block text-sm font-medium text-text-primary dark:text-text-dark mb-1.5">
+                            Faculty
+                        </label>
+                        <select
+                            value={faculty}
+                            onChange={e => setFaculty(e.target.value)}
+                            className="w-full px-4 py-2.5 bg-white dark:bg-surface-dark border border-border dark:border-border-dark rounded-xl text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                        >
+                            <option value="">Select faculty</option>
+                            {faculties.map(f => (
+                                <option key={f} value={f}>{f}</option>
+                            ))}
+                        </select>
                     </div>
-                ) : (
-                    <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
-                        No attendees yet. Be the first to register!
-                    </p>
-                )}
-            </Card>
+                    <Input
+                        label="Student ID Number"
+                        value={studentId}
+                        onChange={e => setStudentId(e.target.value)}
+                        maxLength={10}
+                        minLength={10}
+                        pattern="[A-Za-z0-9]{10}"
+                        placeholder="10 characters (letters & numbers)"
+                        autoComplete="off"
+                    />
+                    {formError && <div className="text-error text-sm">{formError}</div>}
+                    <Button
+                        variant="gradient"
+                        type="submit"
+                        loading={registering}
+                        className="w-full"
+                    >
+                        Register
+                    </Button>
+                </form>
+
+            </Modal>
+
+            {/* Registered Students (Admin Only) */}
+            {isAdmin && (
+                <Card hover={false} className="mb-6 overflow-hidden border-2 border-accent-purple/10">
+                    <div className="flex items-center justify-between p-6 pb-2">
+                        <div>
+                            <h3 className="text-lg font-bold text-text-primary dark:text-text-dark">
+                                Registered Students
+                            </h3>
+                            <p className="text-xs text-text-secondary">
+                                {event?.attendees?.length || 0} students joined
+                            </p>
+                        </div>
+                        <Button
+                            variant="gradient"
+                            size="sm"
+                            onClick={() => setShowScanner(true)}
+                            className="rounded-xl shadow-lg shadow-accent-purple/20"
+                        >
+                            <Scan size={16} />
+                            Scan Ticket
+                        </Button>
+                    </div>
+                    
+                    <div className="p-6 pt-4">
+                        {event?.attendees?.length > 0 ? (
+                            <div className="space-y-3">
+                                {event.attendees.map((student, index) => {
+                                const safeStudent = typeof student === 'string'
+                                    ? { _id: student, name: 'Unknown', email: '' }
+                                    : student;
+                                const key = safeStudent?._id || `student-${index}`;
+                                const name = safeStudent?.name || 'Unknown';
+                                const email = safeStudent?.email || 'Email not available';
+
+                                return (
+                                    <div
+                                        key={key}
+                                        className="flex items-center gap-3 p-3 rounded-xl
+                                        bg-surface-alt dark:bg-surface-dark"
+                                    >
+                                        <div className="w-8 h-8 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">
+                                            {name.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-medium text-text-primary dark:text-text-dark">
+                                                {name}
+                                            </p>
+                                            <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                                                {email}
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                            No students registered yet
+                        </p>
+                    )}
+                </div>
+                </Card>
+            )}
 
             {/* Feedback / Rating */}
             {event.status === 'completed' && (
@@ -272,30 +541,123 @@ const EventDetailPage = () => {
             <Modal
                 isOpen={showSuccess}
                 onClose={() => setShowSuccess(false)}
-                title="Registration Successful! 🎉"
+                title={registering ? "Registration Successful! 🎉" : "Your Ticket Details"}
                 size="sm"
             >
-                <div className="text-center space-y-4">
-                    <div className="w-16 h-16 mx-auto rounded-full bg-success/10 flex items-center justify-center">
-                        <Check size={32} className="text-success" />
+                <div className="text-center space-y-5">
+                    {registering && (
+                        <div className="w-16 h-16 mx-auto rounded-full bg-success/10 flex items-center justify-center">
+                            <Check size={32} className="text-success" />
+                        </div>
+                    )}
+                    
+                    <div className="space-y-1">
+                        <p className="text-text-primary dark:text-text-dark font-medium">
+                            {event.title}
+                        </p>
+                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                            {new Date(event.eventDate).toLocaleDateString('en-US', {
+                                month: 'long', day: 'numeric', year: 'numeric'
+                            })}
+                        </p>
                     </div>
-                    <p className="text-text-primary dark:text-text-dark">
-                        You&apos;re registered for <strong>{event.title}</strong>!
-                    </p>
+
+                    {/* QR Code Container */}
+                    <div className="bg-white p-4 rounded-3xl inline-block mx-auto shadow-sm border border-border dark:border-transparent">
+                        <QRCodeCanvas 
+                            value={regId} 
+                            size={160}
+                            level="H"
+                            includeMargin={false}
+                            className="mx-auto"
+                        />
+                    </div>
+
                     <div className="bg-surface-alt dark:bg-surface-dark rounded-2xl p-4">
-                        <p className="text-xs text-text-secondary mb-1">Your Registration ID</p>
+                        <p className="text-[10px] uppercase tracking-wider text-text-secondary mb-1.5 font-bold">Registration ID</p>
                         <div className="flex items-center justify-center gap-2">
                             <code className="text-lg font-mono font-bold gradient-text">{regId}</code>
-                            <button onClick={copyRegId} className="text-text-secondary hover:text-accent-purple cursor-pointer">
+                            <button onClick={copyRegId} className="p-1.5 text-text-secondary hover:text-accent-purple hover:bg-white dark:hover:bg-surface-dark-alt rounded-lg transition-all cursor-pointer">
                                 <Copy size={16} />
                             </button>
                         </div>
                     </div>
-                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
-                        Save this ID — you may need it at check-in.
+
+                    <p className="text-xs text-text-secondary dark:text-text-dark-secondary px-4 leading-relaxed">
+                        Scan this QR code at the event venue to check-in.
                     </p>
-                    <Button variant="gradient" onClick={() => setShowSuccess(false)} className="w-full">
+
+                    <Button variant="gradient" onClick={() => setShowSuccess(false)} className="w-full h-12 rounded-2xl shadow-lg shadow-accent-purple/20">
                         Done
+                    </Button>
+                </div>
+            </Modal>
+
+            {/* Scanner Modal */}
+            <Modal
+                isOpen={showScanner}
+                onClose={() => setShowScanner(false)}
+                title="Scan Registration QR"
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <div id="reader" className="overflow-hidden rounded-2xl border-2 border-dashed border-border dark:border-border-dark"></div>
+                    <p className="text-center text-xs text-text-secondary px-4">
+                        Position the student's registration QR code within the frame to verify.
+                    </p>
+                    <Button variant="outline" onClick={() => setShowScanner(false)} className="w-full">
+                        Cancel
+                    </Button>
+                </div>
+            </Modal>
+
+            {/* Scan Result Modal */}
+            <Modal
+                isOpen={!!scanResult}
+                onClose={() => setScanResult(null)}
+                title={scanResult?.status === 'success' ? "Verification Successful" : "Verification Failed"}
+                size="sm"
+            >
+                <div className="text-center space-y-6 py-4">
+                    {scanResult?.status === 'success' ? (
+                        <>
+                            <div className="w-20 h-20 mx-auto rounded-full bg-success/10 flex items-center justify-center">
+                                <Check size={40} className="text-success" />
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-xl font-bold text-text-primary dark:text-text-dark">
+                                    {scanResult.student.name}
+                                </h4>
+                                <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                                    {scanResult.student.email}
+                                </p>
+                                <Badge variant="success" className="mx-auto mt-2 px-4 py-1.5">
+                                    Verified Attendee
+                                </Badge>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="w-20 h-20 mx-auto rounded-full bg-error/10 flex items-center justify-center">
+                                <AlertCircle size={40} className="text-error" />
+                            </div>
+                            <div className="space-y-2">
+                                <h4 className="text-xl font-bold text-text-primary dark:text-text-dark">
+                                    Access Denied
+                                </h4>
+                                <p className="text-sm text-text-secondary dark:text-text-dark-secondary px-4 leading-relaxed">
+                                    {scanResult?.message}
+                                </p>
+                            </div>
+                        </>
+                    )}
+
+                    <Button 
+                        variant={scanResult?.status === 'success' ? 'gradient' : 'default'} 
+                        onClick={() => setScanResult(null)} 
+                        className="w-full h-12 rounded-2xl"
+                    >
+                        Close
                     </Button>
                 </div>
             </Modal>

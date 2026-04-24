@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Send, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Send, Image as ImageIcon, X } from 'lucide-react';
 import { groupAPI, postAPI } from '../services/api';
 import { useToast } from '../components/ui/Toast';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
 import Loader from '../components/ui/Loader';
 
 const CreatePostPage = () => {
@@ -18,8 +17,23 @@ const CreatePostPage = () => {
     const [loading, setLoading] = useState(true);
 
     const [content, setContent] = useState('');
-    const [image, setImage] = useState('');
+    const [imageFile, setImageFile] = useState(null);
+    const [imagePreview, setImagePreview] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const fileInputRef = useRef(null);
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setImageFile(file);
+        setImagePreview(URL.createObjectURL(file));
+    };
+
+    const removeImage = () => {
+        setImageFile(null);
+        setImagePreview('');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
 
     useEffect(() => {
         const fetchGroup = async () => {
@@ -42,12 +56,19 @@ const CreatePostPage = () => {
 
         setSubmitting(true);
         try {
+            let imageUrl = '';
+            if (imageFile) {
+                const formData = new FormData();
+                formData.append('image', imageFile);
+                const uploadRes = await postAPI.uploadImage(id, formData);
+                imageUrl = uploadRes.data?.imageUrl || '';
+            }
             await postAPI.create(id, {
                 content: content.trim(),
-                image: image.trim() || undefined
+                image: imageUrl || undefined,
             });
             toast.success('Post created successfully!');
-            navigate(`/groups/${id}`); // Redirect back to group detail
+            navigate(`/groups/${id}`);
         } catch (err) {
             toast.error(err.message || 'Failed to create post');
         } finally {
@@ -123,29 +144,43 @@ const CreatePostPage = () => {
                             </div>
                         </div>
 
-                        {/* Image URL */}
+                        {/* Image Upload */}
                         <div className="space-y-1.5">
                             <label className="block text-sm font-medium text-text-primary dark:text-text-dark flex items-center gap-2">
                                 <ImageIcon size={16} />
                                 Add an Image (Optional)
                             </label>
-                            <Input
-                                type="url"
-                                placeholder="https://example.com/image.jpg"
-                                value={image}
-                                onChange={(e) => setImage(e.target.value)}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp,image/gif"
+                                onChange={handleImageChange}
+                                className="hidden"
                             />
-                            {image && (
-                                <div className="mt-4 rounded-xl overflow-hidden border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-dark flex items-center justify-center p-2 h-48">
+                            {!imagePreview ? (
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-full border-2 border-dashed border-border dark:border-border-dark rounded-xl py-8 flex flex-col items-center gap-2 text-text-secondary hover:border-accent-purple hover:text-accent-purple transition-colors cursor-pointer"
+                                >
+                                    <ImageIcon size={28} />
+                                    <span className="text-sm">Click to upload an image</span>
+                                    <span className="text-xs">JPEG, PNG, WebP or GIF · max 5MB</span>
+                                </button>
+                            ) : (
+                                <div className="relative rounded-xl overflow-hidden border border-border dark:border-border-dark bg-surface-alt dark:bg-surface-dark flex items-center justify-center p-2 h-48">
                                     <img
-                                        src={image}
+                                        src={imagePreview}
                                         alt="Post preview"
                                         className="h-full object-contain"
-                                        onError={(e) => {
-                                            e.target.onerror = null;
-                                            e.target.src = 'https://via.placeholder.com/400x200?text=Invalid+Image+URL';
-                                        }}
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={removeImage}
+                                        className="absolute top-2 right-2 bg-black/60 text-white rounded-full p-1 hover:bg-black/80 cursor-pointer"
+                                    >
+                                        <X size={14} />
+                                    </button>
                                 </div>
                             )}
                         </div>

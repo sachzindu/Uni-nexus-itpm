@@ -4,15 +4,16 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const http = require('http');
+const express = require('express');
+const cors = require('cors');
 const { Server } = require('socket.io');
 const helmet = require('helmet');
-const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
-
 const connectDB = require('./config/db');
 const { errorHandler } = require('./middleware/errorMiddleware');
 const { initializeSocket } = require('./utils/socketHandler');
+const path = require('path');
 const logger = require('./utils/logger');
 
 // Route imports
@@ -26,43 +27,70 @@ const chatGroupRoutes = require('./routes/chatGroupRoutes');
 const interestRoutes = require('./routes/interestRoutes');
 const friendRequestRoutes = require('./routes/friendRequestRoutes');
 
-// Initialize Express app
 const app = express();
-const server = http.createServer(app);
 
-// Initialize Socket.io with CORS
-const io = new Server(server, {
-    cors: {
-        origin: process.env.CLIENT_URL || '*',
-        methods: ['GET', 'POST'],
-        credentials: true,
+const clientOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+const corsOptions = {
+    origin: (origin, callback) => {
+        // Allow non-browser clients (no origin header) and allowed browser origins.
+        if (!origin || clientOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+        callback(new Error(`CORS blocked for origin: ${origin}`));
     },
-    pingInterval: 30000,
-    pingTimeout: 10000,
-});
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+};
 
 app.set('io', io);
 
 // ─── Middleware Stack ─────────────────────────────────────────
 app.use(helmet());
 app.use(
-    cors({
-        origin: process.env.CLIENT_URL || 'http://localhost:5173',
-        credentials: true,
+    helmet({
+        crossOriginResourcePolicy: false,
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                'img-src': ["'self'", 'data:', 'http://localhost:3000', 'https:'],
+                'connect-src': ["'self'", 'http://localhost:3000', 'ws://localhost:3000', 'https:'],
+            },
+        },
     })
 );
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// HTTP request logging (dev only)
-if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
+
+if (process.env.NODE_ENV !== 'test') {
+    app.use(morgan(process.env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 }
 
-// ─── API Routes ──────────────────────────────────────────────
+// ─── Static File Serving ─────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ─── Static File Serving ─────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: 'Server is healthy',
+        timestamp: new Date().toISOString(),
+    });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/groups', groupRoutes);
@@ -73,48 +101,44 @@ app.use('/api/chat-groups', chatGroupRoutes);
 app.use('/api/interests', interestRoutes);
 app.use('/api/friend-requests', friendRequestRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: 'UniNexus API is running',
-        environment: process.env.NODE_ENV,
-        timestamp: new Date().toISOString(),
-    });
-});
-
-// 404 handler for unmatched routes
 app.use((req, res) => {
     res.status(404).json({
         success: false,
-        message: `Route ${req.originalUrl} not found`,
+        message: `Route not found: ${req.originalUrl}`,
     });
 });
 
-// Global error handler (must be last)
 app.use(errorHandler);
 
-// ─── Socket.io Initialization ────────────────────────────────
-initializeSocket(io);
+const PORT = Number(process.env.PORT) || 3000;
+const server = http.createServer(app);
 
-// ─── Start Server ────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const io = new Server(server, {
+    cors: {
+        origin: clientOrigins,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    },
+    transports: ['websocket', 'polling'],
+});
+
+initializeSocket(io);
 
 const startServer = async () => {
     try {
+        console.log('[BOOT] Starting server...');
         await connectDB();
 
         server.listen(PORT, () => {
-            logger.info(`🚀 UniNexus server running on port ${PORT}`);
-            logger.info(`📡 Socket.io listening for connections`);
-            logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
+            console.log(`[BOOT] Server running on http://localhost:${PORT}`);
         });
     } catch (error) {
-        logger.error('Failed to start server', { error: error.message });
+        console.error('[BOOT] Failed to start server:', error.message);
         process.exit(1);
     }
 };
 
 startServer();
 
-module.exports = { app, server, io };
+module.exports = app;
