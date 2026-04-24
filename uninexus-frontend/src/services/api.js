@@ -17,6 +17,9 @@ api.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        if (config.data instanceof FormData) {
+            delete config.headers['Content-Type'];
+        }
         return config;
     },
     (error) => Promise.reject(error)
@@ -163,6 +166,19 @@ export const chatAPI = {
         api.get(`/chat/${groupId}/messages`, { params }),
     getChatGroupMessages: (chatGroupId, params) =>
         api.get(`/chat/chat-groups/${chatGroupId}/messages`, { params }),
+    uploadChatGroupPdf: (chatGroupId, file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.post(`/chat/chat-groups/${chatGroupId}/upload`, formData);
+    },
+};
+
+/** Resolve relative upload paths (e.g. /uploads/chat/...) to full URL for <a href> */
+export const getUploadUrl = (relativePath) => {
+    if (!relativePath) return '';
+    if (relativePath.startsWith('http')) return relativePath;
+    const base = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    return base.replace(/\/api\/?$/, '') + relativePath;
 };
 
 // ─── Chat Group API ──────────────────────────────────────────

@@ -29,6 +29,21 @@ const errorHandler = (err, req, res, next) => {
         message = `Duplicate value for '${field}'. This ${field} already exists.`;
     }
 
+    // Multer (file upload)
+    if (err.name === 'MulterError') {
+        statusCode = 400;
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            message = 'File is too large. Maximum size is 15 MB.';
+        } else {
+            message = err.message || 'File upload failed.';
+        }
+    }
+
+    if (err.message === 'Only PDF files are allowed.') {
+        statusCode = 400;
+        message = err.message;
+    }
+
     // Log server errors
     if (statusCode >= 500) {
         logger.error(`${statusCode} - ${message}`, {

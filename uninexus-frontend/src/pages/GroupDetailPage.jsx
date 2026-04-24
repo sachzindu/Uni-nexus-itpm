@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     ArrowLeft, Users, Shield, Plus, ThumbsUp, ThumbsDown, MessageCircle,
+    UserPlus, LogOut, Check, X, Send, Inbox,
     Settings, UserPlus, LogOut, Trash2, Check, X, Send, Image, Hash,
 } from 'lucide-react';
-import { groupAPI, postAPI } from '../services/api';
+import { groupAPI, postAPI, chatAPI } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useSocket } from '../contexts/SocketContext';
 import { useToast } from '../components/ui/Toast';
+import { Skeleton } from '../components/ui/Loader';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
@@ -22,11 +25,28 @@ const GroupDetailPage = () => {
     const { user } = useAuth();
     const toast = useToast();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const {
+        socket,
+        joinRoom,
+        leaveRoom,
+        sendMessage,
+        emitTyping,
+        emitStopTyping,
+        setActiveGroupId,
+        clearGroupNotifications,
+    } = useSocket();
 
     const [group, setGroup] = useState(null);
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState('feed');
+    const [messages, setMessages] = useState([]);
+    const [msgLoading, setMsgLoading] = useState(false);
+    const [newMessageText, setNewMessageText] = useState('');
+    const [typingUsers, setTypingUsers] = useState([]);
+    const messagesEndRef = useRef(null);
+    const typingTimerRef = useRef(null);
     const [deleteLoading, setDeleteLoading] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
@@ -92,6 +112,24 @@ const GroupDetailPage = () => {
         }
     };
 
+    const changeTab = (key) => {
+        setTab(key);
+        if (key === 'feed') {
+            setSearchParams({}, { replace: true });
+        } else {
+            setSearchParams({ tab: key }, { replace: true });
+        }
+    };
+
+    useEffect(() => {
+        const t = searchParams.get('tab');
+        if (t === 'messages' || t === 'members' || t === 'feed' || t === 'requests') {
+            setTab(t);
+        } else {
+            setTab('feed');
+        }
+    }, [searchParams, id]);
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -111,6 +149,89 @@ const GroupDetailPage = () => {
         };
         fetchData();
     }, [id]);
+
+    useEffect(() => {
+        if (!isMember || tab !== 'messages' || !id) return;
+        let cancelled = false;
+        (async () => {
+            setMsgLoading(true);
+            try {
+                const res = await chatAPI.getGroupMessages(id);
+                if (!cancelled) setMessages(res.data?.messages || []);
+            } catch {
+                if (!cancelled) {
+                    setMessages([]);
+                    toast.error('Failed to load messages');
+                }
+            } finally {
+                if (!cancelled) setMsgLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [id, tab, isMember]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    useEffect(() => {
+        if (!socket || !isMember || tab !== 'messages' || !id) return;
+
+        setActiveGroupId(id);
+        clearGroupNotifications(id);
+        joinRoom(id);
+
+        const onNew = (msg) => {
+            setMessages((prev) => {
+                if (msg._id && prev.some((m) => m._id === msg._id)) return prev;
+                return [...prev, msg];
+            });
+        };
+
+        const onTyping = ({ userId, userName, groupId: gid }) => {
+            if (gid !== id || userId === user?._id) return;
+            setTypingUsers((prev) => {
+                if (prev.find((u) => u.userId === userId)) return prev;
+                return [...prev, { userId, userName }];
+            });
+        };
+
+        const onStopTyping = ({ userId, groupId: gid }) => {
+            if (gid !== id) return;
+            setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+        };
+
+        const onErr = (payload) => {
+            toast.error(payload?.message || 'Something went wrong');
+        };
+
+        socket.on('newMessage', onNew);
+        socket.on('userTyping', onTyping);
+        socket.on('userStopTyping', onStopTyping);
+        socket.on('error', onErr);
+
+        return () => {
+            socket.off('newMessage', onNew);
+            socket.off('userTyping', onTyping);
+            socket.off('userStopTyping', onStopTyping);
+            socket.off('error', onErr);
+            leaveRoom(id);
+            setActiveGroupId(null);
+            if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        };
+    }, [
+        socket,
+        isMember,
+        tab,
+        id,
+        user?._id,
+        joinRoom,
+        leaveRoom,
+        setActiveGroupId,
+        clearGroupNotifications,
+    ]);
 
     const handlePost = () => {
         navigate(`/groups/${id}/create-post`);
@@ -179,14 +300,22 @@ const GroupDetailPage = () => {
         }
     };
 
+    const handleSendMessage = (e) => {
+        e.preventDefault();
+        if (!newMessageText.trim() || !id || !isMember) return;
+        sendMessage(id, newMessageText.trim());
+        setNewMessageText('');
+        emitStopTyping(id);
+    };
+
     const handleJoinRequest = async (requestId, status) => {
         try {
             await groupAPI.handleJoinRequest(id, requestId, { status });
+            toast.success(status === 'approved' ? 'Request approved' : 'Request rejected');
             const grpRes = await groupAPI.getById(id);
             setGroup(grpRes.data?.group || grpRes.data);
-            toast.success(`Request ${status}`);
         } catch (err) {
-            toast.error(err.message || 'Failed to handle request');
+            toast.error(err.message || 'Failed to update request');
         }
     };
 
@@ -346,12 +475,20 @@ const GroupDetailPage = () => {
             <div className="flex gap-1 mb-6 bg-surface-alt dark:bg-surface-dark rounded-xl p-1 overflow-x-auto">
                 {[
                     { key: 'feed', label: 'Feed', icon: MessageCircle },
+                    ...(isMember ? [{ key: 'messages', label: 'Messages', icon: Inbox }] : []),
                     ...(isMember ? [{ key: 'chat', label: 'Chat', icon: Hash }] : []),
                     { key: 'members', label: 'Members', icon: Users },
                     ...(isAdmin ? [{ key: 'requests', label: `Requests (${pendingRequests.length})`, icon: UserPlus }] : []),
                 ].map(({ key, label, icon: Icon }) => (
                     <button
                         key={key}
+                        type="button"
+                        onClick={() => changeTab(key)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+              transition-all cursor-pointer whitespace-nowrap ${tab === key
+                                ? 'bg-white dark:bg-surface-dark-alt card-shadow text-text-primary dark:text-text-dark'
+                                : 'text-text-secondary dark:text-text-dark-secondary hover:text-text-primary'
+                            }`}
                         onClick={() => setTab(key)}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer whitespace-nowrap ${tab === key
                             ? 'bg-white dark:bg-surface-dark-alt card-shadow text-text-primary dark:text-text-dark'
@@ -526,6 +663,119 @@ const GroupDetailPage = () => {
                 </div>
             )}
 
+            {/* Group messages (interest group / socket room) */}
+            {tab === 'messages' && isMember && (
+                <div className="bg-white dark:bg-surface-dark-alt rounded-3xl card-shadow overflow-hidden flex flex-col min-h-[420px]">
+                    <div className="px-4 py-3 border-b border-border dark:border-border-dark">
+                        <h2 className="text-lg font-bold text-text-primary dark:text-text-dark">
+                            Group messages
+                        </h2>
+                        <p className="text-xs text-text-secondary dark:text-text-dark-secondary">
+                            Real-time chat for members
+                            {typingUsers.length > 0 && (
+                                <span className="text-accent-purple ml-2">
+                                    {typingUsers.map((u) => u.userName).join(', ')} typing…
+                                </span>
+                            )}
+                        </p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[50vh] bg-surface-alt dark:bg-surface-dark">
+                        {msgLoading ? (
+                            <div className="space-y-3">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : ''}`}>
+                                        <Skeleton className="h-10 w-48 rounded-2xl" />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : messages.length > 0 ? (
+                            messages.map((msg, i) => {
+                                const isMine =
+                                    (typeof msg.sender === 'string' ? msg.sender : msg.sender?._id) ===
+                                    user?._id;
+                                const senderName =
+                                    typeof msg.sender === 'string' ? 'User' : msg.sender?.name || 'User';
+                                return (
+                                    <motion.div
+                                        key={msg._id || i}
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+                                    >
+                                        <div className={`max-w-xs sm:max-w-md ${isMine ? 'order-2' : ''}`}>
+                                            {!isMine && (
+                                                <p className="text-[10px] text-text-secondary dark:text-text-dark-secondary mb-0.5 px-3">
+                                                    {senderName}
+                                                </p>
+                                            )}
+                                            <div
+                                                className={`px-4 py-2 rounded-2xl text-sm ${isMine
+                                                    ? 'gradient-bg text-white rounded-br-md'
+                                                    : 'bg-white dark:bg-surface-dark-alt text-text-primary dark:text-text-dark rounded-bl-md'
+                                                    }`}
+                                            >
+                                                {msg.content}
+                                            </div>
+                                            <p
+                                                className={`text-[9px] text-text-secondary/60 mt-0.5 ${isMine ? 'text-right' : 'text-left'
+                                                    } px-3`}
+                                            >
+                                                {msg.createdAt
+                                                    ? new Date(msg.createdAt).toLocaleTimeString([], {
+                                                        hour: '2-digit',
+                                                        minute: '2-digit',
+                                                    })
+                                                    : ''}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <Inbox size={40} className="text-text-secondary/25 mb-2" />
+                                <p className="text-sm text-text-secondary dark:text-text-dark-secondary">
+                                    No messages yet. Say hello to the group.
+                                </p>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    <form
+                        onSubmit={handleSendMessage}
+                        className="flex items-center gap-2 p-4 border-t border-border dark:border-border-dark bg-white dark:bg-surface-dark-alt"
+                    >
+                        <input
+                            type="text"
+                            value={newMessageText}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                setNewMessageText(v);
+                                if (!id) return;
+                                if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+                                if (v.trim()) {
+                                    emitTyping(id);
+                                    typingTimerRef.current = setTimeout(() => emitStopTyping(id), 1500);
+                                } else {
+                                    emitStopTyping(id);
+                                }
+                            }}
+                            onBlur={() => emitStopTyping(id)}
+                            placeholder="Message the group…"
+                            className="flex-1 bg-surface-alt dark:bg-surface-dark px-4 py-2 rounded-xl text-sm
+                text-text-primary dark:text-text-dark focus:outline-none focus:ring-2 focus:ring-accent-purple/50"
+                        />
+                        <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            type="submit"
+                            disabled={!newMessageText.trim()}
+                            className="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center text-white
+                disabled:opacity-50 cursor-pointer"
+                        >
+                            <Send size={18} />
+                        </motion.button>
+                    </form>
+                </div>
             {/* Chat Tab */}
             {tab === 'chat' && isMember && (
                 <GroupChatTab groupId={id} />
